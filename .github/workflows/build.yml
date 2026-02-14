@@ -1,0 +1,88 @@
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # -------------------------
+      # Setup Rust
+      # -------------------------
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build sekai-core
+        run: |
+          cd sekai-core
+          cargo build --release
+
+      # -------------------------
+      # Setup Python
+      # -------------------------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        run: |
+          pip install pyinstaller PySide6
+
+      - name: Build sekai-ui
+        run: |
+          pyinstaller sekai-ui/main.py `
+            --name SekaiTranslator `
+            --windowed `
+            --onefile `
+            --icon sekai-ui/assets/app_icon.ico `
+            --collect-all PySide6 `
+            --paths sekai-ui `
+            --paths sekai-core/py/src `
+            --noconfirm `
+            --clean
+
+      # -------------------------
+      # Prepare release folder
+      # -------------------------
+      - name: Prepare release
+        run: |
+          mkdir release
+          copy dist\SekaiTranslator.exe release\
+          copy sekai-core\target\release\sekai-core.exe release\
+
+      # -------------------------
+      # Install Inno Setup
+      # -------------------------
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build installer
+        run: iscc installer.iss
+
+      # -------------------------
+      # Generate SHA256
+      # -------------------------
+      - name: Generate SHA256
+        run: |
+          certutil -hashfile installer_output\SekaiTranslator_Setup_${{ github.ref_name }}.exe SHA256 > installer_output\SekaiTranslator_Setup_${{ github.ref_name }}.sha256
+
+      # -------------------------
+      # Upload to Release
+      # -------------------------
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            installer_output/*.exe
+            installer_output/*.sha256

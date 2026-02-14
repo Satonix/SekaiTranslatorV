@@ -1426,7 +1426,7 @@ class MainWindow(QMainWindow):
 
             updater = GitHubUpdater(
                 owner="Satonix",
-                repo="SekaiTranslator",
+                repo="SekaiTranslatorV",
                 current_version=current_version,
             )
 
