@@ -74,8 +74,19 @@ jobs:
       # Generate SHA256
       # -------------------------
       - name: Generate SHA256
+        shell: pwsh
         run: |
-          certutil -hashfile installer_output\SekaiTranslator_Setup_${{ github.ref_name }}.exe SHA256 > installer_output\SekaiTranslator_Setup_${{ github.ref_name }}.sha256
+          $exe = Get-ChildItem installer_output\*.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) { throw "Nenhum .exe encontrado em installer_output" }
+
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          $shaPath = Join-Path $exe.DirectoryName ($exe.BaseName + ".sha256")
+          Set-Content -Path $shaPath -Value $hash -Encoding ASCII
+
+          Write-Host "Installer: $($exe.Name)"
+          Write-Host "SHA256: $shaPath"
+
+
 
       # -------------------------
       # Upload to Release
