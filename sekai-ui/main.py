@@ -1,0 +1,109 @@
+import sys
+import os
+import traceback
+
+# garante que imports como `views.*` funcionem em builds empacotados
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+APP_VERSION = "0.1.0"
+
+from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtGui import QPalette, QColor
+from PySide6.QtCore import Qt
+
+from core_client import SekaiCoreClient
+from views.main_window import MainWindow
+
+
+def apply_dark_theme(app: QApplication):
+    """
+    Tema escuro suave, baseado no SekaiTranslator original.
+    Usa QPalette + Fusion.
+    """
+    app.setStyle("Fusion")
+
+    palette = QPalette()
+
+    palette.setColor(QPalette.Window, QColor(30, 30, 30))
+    palette.setColor(QPalette.WindowText, Qt.white)
+
+    palette.setColor(QPalette.Base, QColor(24, 24, 24))
+    palette.setColor(QPalette.AlternateBase, QColor(36, 36, 36))
+
+    palette.setColor(QPalette.Text, Qt.white)
+
+    palette.setColor(QPalette.Button, QColor(45, 45, 45))
+    palette.setColor(QPalette.ButtonText, Qt.white)
+
+    palette.setColor(QPalette.Highlight, QColor(60, 120, 200))
+    palette.setColor(QPalette.HighlightedText, Qt.white)
+
+    app.setPalette(palette)
+
+
+def _show_fatal(title: str, message: str):
+    # QMessageBox precisa de QApplication já criado
+    QMessageBox.critical(None, title, message)
+
+
+def main():
+    app = QApplication(sys.argv)
+    apply_dark_theme(app)
+
+    core_path = (
+        r"C:\Users\lucas\Documents\Sekai Visual Novel\Ferramentas\SekaiTranslatorV"
+        r"\sekai-core\target\debug\sekai-core.exe"
+    )
+
+    if not os.path.exists(core_path):
+        _show_fatal(
+            "Core não encontrado",
+            "Não foi possível localizar o executável do sekai-core.\n\n"
+            f"Caminho:\n{core_path}\n\n"
+            "Compile o core (cargo build) ou ajuste o core_path.",
+        )
+        return 1
+
+    core = SekaiCoreClient(core_path=core_path)
+
+    try:
+        core.start()
+
+        # sanity check: ping (detecta core que abriu e morreu na hora)
+        try:
+            resp = core.send("ping", {}, timeout=5)
+            if resp.get("status") != "ok":
+                raise RuntimeError(resp.get("message") or "ping failed")
+        except Exception as e:
+            tail = "\n".join(core.get_stderr_tail(30)) if hasattr(core, "get_stderr_tail") else ""
+            extra = f"\n\nstderr:\n{tail}" if tail else ""
+            _show_fatal(
+                "Falha ao iniciar o core",
+                f"O sekai-core iniciou, mas não respondeu ao ping.\n\nErro: {e}{extra}",
+            )
+            return 1
+
+        window = MainWindow(core)
+        window.show()
+
+        exit_code = app.exec()
+        return int(exit_code)
+
+    except Exception:
+        # Erro inesperado: mostra e garante stop do core
+        err_text = traceback.format_exc()
+        _show_fatal("Erro fatal", err_text)
+        return 1
+
+    finally:
+        try:
+            core.stop()
+        except Exception:
+            # não deixe erro no stop mascarar a saída do app
+            pass
+
+
+if __name__ == "__main__":
+    sys.exit(main())

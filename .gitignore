@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.dist/
+build/
+dist/
+venv/
+.env
+
+# PyInstaller
+*.spec
+
+# Qt / caches
+*.log
+
+# Rust
+target/
+
+# Release artifacts
+release/
+installer_output/
+dist_installer/
