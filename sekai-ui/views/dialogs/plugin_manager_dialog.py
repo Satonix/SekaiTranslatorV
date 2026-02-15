@@ -1,4 +1,3 @@
-# views/dialogs/plugin_manager_dialog.py
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
@@ -49,19 +48,14 @@ class PluginManagerDialog(QDialog):
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
 
-        # Tabs
         self.parsers_tab = self._build_parsers_tab()
         self.plugins_tab = self._build_plugins_tab()
 
         self.tabs.addTab(self.parsers_tab, "Parsers")
         self.tabs.addTab(self.plugins_tab, "Plugins")
 
-        # inicial
         self._reload_parsers_list()
 
-    # ============================================================
-    # Parsers tab
-    # ============================================================
     def _build_parsers_tab(self) -> QWidget:
         w = QWidget()
         outer = QVBoxLayout(w)
@@ -104,15 +98,13 @@ class PluginManagerDialog(QDialog):
         try:
             reload_parsers()
         except Exception:
-            # não derruba o app; segue com o que tiver
             pass
 
         self.parsers_list.clear()
 
         mgr = get_parser_manager()
-        reg_items = mgr.registry.all()  # list[RegisteredParser]
+        reg_items = mgr.registry.all()
 
-        # Ordena: builtin primeiro, depois external, por nome
         def _sort_key(rp):
             src = getattr(rp, "source", "")
             p = rp.plugin
@@ -143,7 +135,6 @@ class PluginManagerDialog(QDialog):
 
         meta = it.data(Qt.UserRole) or {}
         src = (meta.get("source") or "").strip()
-        # remove só external
         self.btn_remove.setEnabled(src == "external")
 
     def _install_from_repo(self) -> None:
@@ -181,10 +172,6 @@ class PluginManagerDialog(QDialog):
         if src != "external":
             return
 
-        # Como o external loader usa pasta como “nome do plugin”,
-        # a remoção precisa ser pela pasta. Por padrão, usamos plugin_id == folder_name? Não garantido.
-        # Então adotamos uma convenção: folder_name == plugin_id.
-        # Se você preferir, a gente muda o installer para salvar um mapping.
         folder_name = pid
 
         res = QMessageBox.question(
@@ -205,9 +192,6 @@ class PluginManagerDialog(QDialog):
         finally:
             self._reload_parsers_list()
 
-    # ============================================================
-    # Plugins tab (placeholder)
-    # ============================================================
     def _build_plugins_tab(self) -> QWidget:
         w = QWidget()
         outer = QVBoxLayout(w)

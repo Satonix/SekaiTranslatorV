@@ -1,4 +1,3 @@
-# views/dialogs/progress_dialog.py
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
@@ -59,7 +58,6 @@ class ProgressDialog(QDialog):
         self._total = max(0, total)
 
         if self._total <= 0:
-            # fallback: indeterminado (se você quiser usar em outros lugares)
             self.bar.setRange(0, 0)
             self.bar.setValue(0)
         else:
@@ -72,7 +70,6 @@ class ProgressDialog(QDialog):
         done = int(done or 0)
 
         if self._total <= 0:
-            # se estiver em indeterminado, só muda texto
             self._update_text(done=done)
             return
 
@@ -91,6 +88,3 @@ class ProgressDialog(QDialog):
 
     def _on_cancel(self) -> None:
         self.canceled.emit()
-        # NÃO fecha aqui se você quer esperar o worker realmente cancelar;
-        # mas pode fechar se preferir:
-        # self.close()

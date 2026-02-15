@@ -30,18 +30,15 @@ class GlossaryDialog(QDialog):
         title.setStyleSheet("font-size: 14px; font-weight: bold;")
         layout.addWidget(title)
 
-        # Lista de termos
         self.term_list = QListWidget()
         layout.addWidget(self.term_list, 1)
 
         self._load_dummy_terms()
 
-        # Entrada
         self.term_edit = QLineEdit()
         self.term_edit.setPlaceholderText("Novo termo")
         layout.addWidget(self.term_edit)
 
-        # Botões
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 

@@ -27,12 +27,10 @@ class QADialog(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        # Título
         title = QLabel("Verificação de Qualidade (QA)")
         title.setStyleSheet("font-size: 14px; font-weight: bold;")
         layout.addWidget(title)
 
-        # Escopo
         scope_box = QGroupBox("Escopo")
         scope_layout = QVBoxLayout(scope_box)
 
@@ -45,17 +43,14 @@ class QADialog(QDialog):
 
         layout.addWidget(scope_box)
 
-        # Resultados
         results_label = QLabel("Resultados:")
         layout.addWidget(results_label)
 
         self.results_list = QListWidget()
         layout.addWidget(self.results_list, 1)
 
-        # Dados fake
         self._load_dummy_results()
 
-        # Botões
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -67,11 +62,9 @@ class QADialog(QDialog):
 
         layout.addLayout(btn_layout)
 
-        # Conexões
         self.btn_close.clicked.connect(self.reject)
         self.btn_run.clicked.connect(self._run_qa)
 
-    # Internals
     def _load_dummy_results(self):
         """
         Resultados fictícios para UX.

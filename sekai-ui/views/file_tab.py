@@ -39,7 +39,6 @@ class FileTab(QWidget):
         self.parse_ctx = None
 
 
-        # all entries do arquivo (inclui não traduzíveis)
         self._entries: list[dict] = []
         self._pending_select_entry_id: str | None = None
         self._pending_select_source_row: int | None = None
@@ -54,36 +53,29 @@ class FileTab(QWidget):
         splitter = QSplitter(Qt.Vertical)
         layout.addWidget(splitter)
 
-        # Tabela (mostra apenas traduzíveis via model.entries)
         self.table = TranslationTableView(self)
         self.model = TranslationTableModel([])
         self.table.setModel(self.model)
-        # Double-click: focar editor de tradução
         try:
             self.table.doubleClicked.connect(self._on_table_double_clicked)
         except Exception:
             pass
         splitter.addWidget(self.table)
 
-        # Editor
         self.editor = EditorPanel(self)
-        self.editor.bind_file_tab(self)  # essencial
+        self.editor.bind_file_tab(self)
         splitter.addWidget(self.editor)
 
         splitter.setSizes([420, 480])
 
         self._selection_connected = False
 
-        # comportamento (igual ao “antigo”: 1 linha por vez)
         try:
             self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
             self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         except Exception:
             pass
 
-    # =================================================
-    # Dirty state
-    # =================================================
     def set_dirty(self, dirty: bool) -> None:
         dirty = bool(dirty)
         if self.is_dirty == dirty:
@@ -91,9 +83,6 @@ class FileTab(QWidget):
         self.is_dirty = dirty
         self.dirtyChanged.emit(self.is_dirty)
 
-    # =================================================
-    # Mapping helpers (VISÍVEL <-> SOURCE)
-    # =================================================
     def _visible_rows(self) -> list[int]:
         sm = self.table.selectionModel()
         if not sm:
@@ -120,13 +109,11 @@ class FileTab(QWidget):
 
         e = self._entries[source_row]
 
-        # 1) Same dict object
         try:
             return self.model.entries.index(e)
         except Exception:
             pass
 
-        # 2) Match by entry_id (in case objects differ)
         try:
             eid = e.get("entry_id") if isinstance(e, dict) else None
             if eid:
@@ -137,7 +124,6 @@ class FileTab(QWidget):
         except Exception:
             pass
 
-        # 3) Nearest visible row: scan forward, then backward
         try:
             visible_set = set(id(x) for x in (self.model.entries or []))
             for sr in range(source_row + 1, len(self._entries)):
@@ -159,17 +145,11 @@ class FileTab(QWidget):
 
         return None
 
-    # =================================================
-    # Entries / Selection
-    # =================================================
     def set_entries(self, entries: list[dict]):
         self._entries = entries or []
 
-        # importante: o model guarda all_entries internamente e filtra para entries visíveis
         self.model.set_entries(self._entries)
 
-        # ⚠️ importante: selectionModel pode mudar quando setModel/set_entries altera proxy/model internamente.
-        # Mantemos a conexão idempotente.
         sm = self.table.selectionModel()
         if sm and not self._selection_connected:
             sm.selectionChanged.connect(self._on_selection_changed)
@@ -181,7 +161,6 @@ class FileTab(QWidget):
         if self.model.rowCount() > 0:
             self.table.selectRow(0)
 
-        # Apply pending navigation (e.g., SearchDialog opened this tab and asked to jump to a row).
         if self.model.rowCount() > 0 and (self._pending_select_entry_id is not None or self._pending_select_source_row is not None):
             eid = self._pending_select_entry_id
             sr = self._pending_select_source_row
@@ -243,9 +222,6 @@ class FileTab(QWidget):
             QAbstractItemView.PositionAtCenter,
         )
 
-    # =================================================
-    # External navigation helpers (Search / QA)
-    # =================================================
     def select_source_row(self, source_row: int) -> None:
         """Select a row by SOURCE index (index in self._entries).
 
@@ -256,7 +232,6 @@ class FileTab(QWidget):
         except Exception:
             return
 
-        # If entries are not loaded yet, defer selection until set_entries().
         if not self._entries:
             self._pending_select_source_row = sr
             self._pending_select_entry_id = None
@@ -266,11 +241,8 @@ class FileTab(QWidget):
         if not (0 <= sr < len(self._entries)):
             return
 
-        # Try to map SOURCE row -> visible row (filtered model).
         vr = self._visible_row_from_source_row(sr)
         if vr is None:
-            # If not visible due to filters, still try to select by scanning
-            # for the exact dict object in the current model entries.
             try:
                 vr = self.model.entries.index(self._entries[sr])
             except Exception:
@@ -279,7 +251,6 @@ class FileTab(QWidget):
         if vr is None:
             return
 
-        # Select and scroll.
         try:
             self.table.clearSelection()
             self.table.selectRow(vr)
@@ -298,29 +269,23 @@ class FileTab(QWidget):
         brittle when parsers include non-translatable rows or their ordering
         changes. ``entry_id`` is the stable key.
         """
-        # If entries are not loaded yet, defer selection until set_entries().
         if not self._entries:
             self._pending_select_entry_id = str(entry_id or "") or None
             self._pending_select_source_row = int(fallback_row) if isinstance(fallback_row, int) else None
             return
 
-        # 1) Prefer entry_id lookup
         if isinstance(entry_id, str) and entry_id:
             for i, e in enumerate(self._entries or []):
                 if isinstance(e, dict) and str(e.get("entry_id") or "") == entry_id:
                     self.select_source_row(i)
                     return
 
-        # 2) Fallback to row index
         if isinstance(fallback_row, int):
             try:
                 self.select_source_row(int(fallback_row))
             except Exception:
                 return
 
-    # =================================================
-    # Undo/Redo API (MainWindow chama tab.undo/tab.redo)
-    # =================================================
     def undo(self) -> None:
         act = self._undo.pop_undo()
         if not act:
@@ -368,9 +333,6 @@ class FileTab(QWidget):
     def _refresh_editor_from_selection(self) -> None:
         self._on_selection_changed()
 
-    # =================================================
-    # Project state persistence (não toca no arquivo original)
-    # =================================================
     def save_project_state(self, project: dict) -> None:
         if not self.file_path:
             return
@@ -414,9 +376,6 @@ class FileTab(QWidget):
         if self.model.rowCount() > 0:
             self.table.selectRow(0)
 
-    # =================================================
-    # Export (usa parser.rebuild e escreve em pasta de export)
-    # =================================================
     @staticmethod
     def compute_export_path(project: dict, src_path: str) -> str:
         root = (project.get("root_path") or "").strip()
@@ -445,7 +404,6 @@ class FileTab(QWidget):
         if parser is None:
             raise RuntimeError("parser não fornecido para export_to_disk()")
 
-        # validação defensiva
         if not hasattr(parser, "rebuild") or not callable(getattr(parser, "rebuild")):
             raise RuntimeError("parser inválido: não implementa rebuild(ctx, entries)")
 
@@ -494,7 +452,6 @@ class FileTab(QWidget):
 
     def _now_iso(self) -> str:
         from datetime import datetime, timezone
-        # keep offset if possible; use local time with offset
         dt = datetime.now().astimezone()
         return dt.isoformat(timespec="seconds")
 
@@ -520,7 +477,6 @@ class FileTab(QWidget):
         after_snap = self.snapshot_rows(changed_rows)
         self.record_undo_for_rows(changed_rows, before=before_snap, after=after_snap)
 
-        # stamp revisions/audit info for changed fields
         before_map = {changed_rows[i]: (before_snap[i] if i < len(before_snap) else {}) for i in range(len(changed_rows))}
         after_map = {changed_rows[i]: (after_snap[i] if i < len(after_snap) else {}) for i in range(len(changed_rows))}
         for r in changed_rows:

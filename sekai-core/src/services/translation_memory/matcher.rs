@@ -19,7 +19,6 @@ pub fn exact_match<'a>(
         e.source_lang == source_lang
             && e.target_lang == target_lang
             && e.hash == h
-            // segurança total: evita match errado mesmo se houver colisão
             && e.normalized == norm
     })
 }

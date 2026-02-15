@@ -14,25 +14,21 @@ class TranslationTableModel(QAbstractTableModel):
 
     COLUMNS = ["Linha", "Personagem", "Original", "Tradução"]
 
-    # Cores suaves para tema escuro (TEMPORÁRIO)
     STATUS_COLORS = {
-        "untranslated": None,                       # padrão
-        "in_progress": QColor(70, 110, 180, 80),    # azul suave
-        "translated": QColor(70, 160, 120, 80),     # verde suave
-        "reviewed": QColor(140, 110, 180, 80),      # roxo suave
+        "untranslated": None,
+        "in_progress": QColor(116, 120, 18, 160), #747812
+        "translated": QColor(42, 79, 49, 160), #2A4F31
+        "reviewed": QColor(140, 110, 180, 160),
     }
 
     def __init__(self, entries=None, parent=None):
         super().__init__(parent)
 
-        # all_entries = tudo que veio do core
         self.all_entries: list[dict] = entries or []
 
-        # entries = apenas traduzíveis (o que aparece na tabela)
         self.entries: list[dict] = []
         self.set_entries(self.all_entries)
 
-    # Qt básicos
     def rowCount(self, parent=QModelIndex()):
         return len(self.entries)
 
@@ -55,7 +51,6 @@ class TranslationTableModel(QAbstractTableModel):
             return Qt.NoItemFlags
         return Qt.ItemIsSelectable | Qt.ItemIsEnabled
 
-    # Data
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
             return None
@@ -63,14 +58,11 @@ class TranslationTableModel(QAbstractTableModel):
         entry = self.entries[index.row()]
         col = index.column()
 
-        # Texto
         if role == Qt.DisplayRole:
             if col == 0:
-                # Linha real do arquivo quando disponível (Kirikiri: line_number)
                 ln = entry.get("line_number")
                 if isinstance(ln, int) and ln > 0:
                     return ln
-                # fallback: índice visível
                 return index.row() + 1
 
             if col == 1:
@@ -82,17 +74,14 @@ class TranslationTableModel(QAbstractTableModel):
             if col == 3:
                 return entry.get("translation", "") or ""
 
-        # Alinhamento
         if role == Qt.TextAlignmentRole:
             if col == 0:
                 return Qt.AlignCenter
             return Qt.AlignLeft | Qt.AlignVCenter
 
-        # Cor de fundo (status)
         if role == Qt.BackgroundRole:
             status = entry.get("status", "untranslated")
 
-            # Se por algum motivo vier como algo não-string, faz fallback
             if not isinstance(status, str):
                 status = "untranslated"
 
@@ -100,7 +89,6 @@ class TranslationTableModel(QAbstractTableModel):
 
         return None
 
-    # Helpers
     def set_entries(self, entries: list[dict]):
         """
         Recebe entradas do core e mantém apenas as traduzíveis na tabela.
@@ -110,7 +98,7 @@ class TranslationTableModel(QAbstractTableModel):
         self.all_entries = entries or []
         self.entries = [
             e for e in self.all_entries
-            if e.get("is_translatable", True)  # fallback True por compat
+            if e.get("is_translatable", True)
         ]
 
         self.endResetModel()
@@ -132,14 +120,12 @@ class TranslationTableModel(QAbstractTableModel):
         if not (0 <= visible_row < len(self.entries)):
             return None
 
-        # Se o core tiver uma chave única, use-a (entry_id).
         vid = self.entries[visible_row].get("entry_id")
         if vid:
             for i, e in enumerate(self.all_entries):
                 if e.get("entry_id") == vid:
                     return i
 
-        # Fallback: tenta por line_number + original (não perfeito, mas seguro)
         ln = self.entries[visible_row].get("line_number")
         orig = self.entries[visible_row].get("original")
         for i, e in enumerate(self.all_entries):

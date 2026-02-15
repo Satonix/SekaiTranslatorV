@@ -12,7 +12,6 @@ pub struct ProjectInfo {
     #[serde(default)]
     pub project_path: String,
 
-    // Compat: se algum dia você salvar como "game_root" no JSON, ainda abre.
     #[serde(default, alias = "game_root")]
     pub root_path: String,
 
@@ -31,14 +30,10 @@ pub struct ProjectInfo {
     #[serde(default, alias = "target_lang")]
     pub target_language: String,
 
-    // NOVO — Configurações de IA por projeto
 
-    /// Preset de prompt:
-    /// "default" | "literal" | "natural" | "custom"
     #[serde(default = "default_ai_prompt_preset")]
     pub ai_prompt_preset: String,
 
-    /// Texto livre do prompt (usado apenas se preset == "custom")
     #[serde(default)]
     pub ai_custom_prompt_text: String,
 }

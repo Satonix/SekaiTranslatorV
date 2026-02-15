@@ -22,7 +22,6 @@ class SekaiCoreClient:
     def run(self, command: str, payload: Optional[dict[str, Any]] = None, timeout: Optional[float] = None) -> dict[str, Any]:
         req = {"cmd": command, "payload": payload or {}}
 
-        # Se seu core funciona como "one-shot" (executa e sai):
         p = subprocess.run(
             [self.core_exe_path],
             input=(json.dumps(req, ensure_ascii=False) + "\n").encode("utf-8"),
@@ -39,9 +38,7 @@ class SekaiCoreClient:
         if not out:
             return {"ok": True, "result": None}
 
-        # Se o core responder com JSON
         try:
             return json.loads(out)
         except Exception:
-            # fallback: texto cru
             return {"ok": True, "result": out}

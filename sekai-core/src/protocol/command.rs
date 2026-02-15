@@ -10,7 +10,7 @@ pub enum Command {
     ProjectList,
     ProjectCreate,
     ProjectOpen,
-    ProjectSave, // <- NOVO
+    ProjectSave,
     Unknown,
 }
 
@@ -27,7 +27,7 @@ impl From<&str> for Command {
             "project.list" => Command::ProjectList,
             "project.create" => Command::ProjectCreate,
             "project.open" => Command::ProjectOpen,
-            "project.save" => Command::ProjectSave, // <- NOVO
+            "project.save" => Command::ProjectSave,
             _ => Command::Unknown,
         }
     }

@@ -1,4 +1,3 @@
-# parsers/api.py
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -23,13 +22,13 @@ def list_parsers() -> dict:
                 "plugin_id": (getattr(p, "plugin_id", "") or "").strip(),
                 "name": (getattr(p, "name", "") or "").strip(),
                 "extensions": sorted({str(e).lower() for e in (getattr(p, "extensions", None) or set())}),
-                "source": rp.source,  # "builtin" | "external"
+                "source": rp.source,
             }
         )
 
     return {
         "repo_installed": bool(is_repo_installed()),
-        "repo_folders": get_installed_parser_ids(),  # só nomes de pastas que têm plugin.py
+        "repo_folders": get_installed_parser_ids(),
         "parsers": sorted(items, key=lambda x: (x["source"], x["plugin_id"])),
     }
 
@@ -47,7 +46,6 @@ def update_repo_from_github(
     spec = RepoSpec(owner=owner, name=name, branch=branch)
     installed = install_or_update_repo(spec=spec, timeout=timeout)
 
-    # Recarrega os plugins após instalar
     reload_parsers()
 
     return {

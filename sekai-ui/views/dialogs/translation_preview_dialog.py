@@ -1,4 +1,3 @@
-# views/dialogs/translation_preview_dialog.py
 
 from __future__ import annotations
 
@@ -95,7 +94,6 @@ class TranslationPreviewDialog(QDialog):
 
         self.confirmed: bool = False
 
-        # Monta rows de preview (apenas as que possuem tradução retornada)
         preview_rows: List[dict] = []
         for r in source_rows or []:
             if not (0 <= r < len(entries)):
@@ -154,9 +152,9 @@ class TranslationPreviewDialog(QDialog):
         header_h.setHighlightSections(False)
         header_h.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        header_h.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Linha
-        header_h.setSectionResizeMode(1, QHeaderView.Stretch)           # Original
-        header_h.setSectionResizeMode(2, QHeaderView.Stretch)           # Tradução
+        header_h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header_h.setSectionResizeMode(1, QHeaderView.Stretch)
+        header_h.setSectionResizeMode(2, QHeaderView.Stretch)
 
         table_l.addWidget(self.table)
         main.addWidget(table_wrap, 1)

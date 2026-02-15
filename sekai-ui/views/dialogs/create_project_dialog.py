@@ -38,12 +38,10 @@ class CreateProjectDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # Nome
         layout.addWidget(QLabel("Nome do projeto"))
         self.name_edit = QLineEdit()
         layout.addWidget(self.name_edit)
 
-        # Pasta do jogo
         layout.addWidget(QLabel("Pasta do jogo"))
         root_layout = QHBoxLayout()
         self.root_edit = QLineEdit()
@@ -53,7 +51,6 @@ class CreateProjectDialog(QDialog):
         root_layout.addWidget(browse)
         layout.addLayout(root_layout)
 
-        # Encoding
         layout.addWidget(QLabel("Encoding do texto"))
         self.encoding = QComboBox()
         self.encoding.addItem("Detectar automaticamente", "auto")
@@ -65,7 +62,6 @@ class CreateProjectDialog(QDialog):
         ])
         layout.addWidget(self.encoding)
 
-        # Idiomas
         layout.addWidget(QLabel("Idioma original"))
         self.source_lang = QComboBox()
         for c, n in LANGUAGES.items():
@@ -79,7 +75,6 @@ class CreateProjectDialog(QDialog):
             self.target_lang.addItem(n, c)
         layout.addWidget(self.target_lang)
 
-        # Parser
         layout.addWidget(QLabel("Parser do jogo"))
         self.parser = QComboBox()
         layout.addWidget(self.parser)
@@ -90,14 +85,10 @@ class CreateProjectDialog(QDialog):
 
         self._reload_parsers()
 
-        # Criar
         btn = QPushButton("Criar Projeto")
         btn.clicked.connect(self._create)
         layout.addWidget(btn)
 
-    # ---------------------------
-    # UI helpers
-    # ---------------------------
     def _browse(self):
         path = QFileDialog.getExistingDirectory(self, "Selecione a pasta do jogo")
         if path:
@@ -115,7 +106,6 @@ class CreateProjectDialog(QDialog):
         except Exception:
             mgr = get_parser_manager()
 
-        # Auto
         self.parser.addItem("Auto-detect (recomendado)", "")
 
         plugins = mgr.all_plugins() if mgr else []
@@ -141,13 +131,9 @@ class CreateProjectDialog(QDialog):
             self.parser.addItem(label, pid)
 
         if self.parser.count() == 1:
-            # só ficou o Auto
             self.parser.addItem("Nenhum parser instalado (instale via Plugins → Parsers)", "__none__")
             self.parser.setCurrentIndex(1)
 
-    # ---------------------------
-    # Core helpers
-    # ---------------------------
     def _detect_encoding(self, root_path: str) -> str:
         """
         Pede ao sekai-core para detectar encoding.
@@ -170,9 +156,6 @@ class CreateProjectDialog(QDialog):
 
         return "utf-8"
 
-    # ---------------------------
-    # Create flow
-    # ---------------------------
     def _create(self):
         name = self.name_edit.text().strip()
         root = self.root_edit.text().strip()
@@ -182,7 +165,6 @@ class CreateProjectDialog(QDialog):
             QMessageBox.warning(self, "Erro", "Nome do projeto e pasta do jogo são obrigatórios.")
             return
 
-        # Nenhum parser instalado
         if parser_id == "__none__":
             QMessageBox.warning(
                 self,
@@ -192,20 +174,18 @@ class CreateProjectDialog(QDialog):
             )
             return
 
-        # Encoding
         enc_data = self.encoding.currentData()
         if enc_data == "auto":
             encoding = self._detect_encoding(root)
         else:
             encoding = self.encoding.currentText()
 
-        # ✅ cria o projeto no core (parser_id já persiste no project.json)
         resp = self.core.send("project.create", {
             "name": name,
             "game_root": root,
             "encoding": encoding,
-            "engine": "",           # legado
-            "parser_id": parser_id, # "" = auto-detect
+            "engine": "",
+            "parser_id": parser_id,
             "source_language": self.source_lang.currentData(),
             "target_language": self.target_lang.currentData(),
         })

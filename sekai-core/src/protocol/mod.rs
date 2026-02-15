@@ -78,8 +78,6 @@ pub fn handle(input: &str) -> String {
     match cmd_str {
         "ping" => ok(id, json!({ "message": "sekai-core alive" })),
 
-        // OBS: no modelo novo, parse/rebuild são UI-side (parsers plugin no sekai-ui).
-        // Se quiser manter estes comandos no core por compat, deixe como está.
         "parse_text" => {
             let text = payload.get("text").and_then(|v| v.as_str()).unwrap_or("");
             let entries = parsers::kirikiri::parse(text);
@@ -104,7 +102,6 @@ pub fn handle(input: &str) -> String {
             ok(id, json!({ "issues": issues }))
         }
 
-        // se seu UI chama "encoding.detect", mapeie aqui também pra evitar mismatch
         "encoding.detect" | "detect_encoding" => {
             let path_str = payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
             if path_str.is_empty() {
@@ -170,7 +167,6 @@ pub fn handle(input: &str) -> String {
             let game_root = payload.get("game_root").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let encoding = payload.get("encoding").and_then(|v| v.as_str()).unwrap_or("utf-8").to_string();
 
-            // legado: continua aceitando engine (pode vir vazio)
             let engine = payload.get("engine").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let parser_id = payload.get("parser_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
 

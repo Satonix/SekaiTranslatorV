@@ -1,4 +1,3 @@
-# parsers/base.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -29,13 +28,10 @@ class ParserPlugin(Protocol):
     Interface que um parser-plugin deve implementar.
     """
 
-    # Identificador estável (ex: "kirikiri.ks", "artemis.ast")
     plugin_id: str
 
-    # Nome exibido no UI
     name: str
 
-    # Extensões suportadas (ex: {".ks", ".ast"})
     extensions: set[str]
 
     def detect(self, ctx: ParseContext, text: str) -> float:

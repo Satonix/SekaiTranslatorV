@@ -22,10 +22,8 @@ from PySide6.QtWidgets import (
     QCheckBox,
 )
 
-# File tabs
 from views.file_tab import FileTab
 
-# Dialogs
 from views.dialogs.login_dialog import LoginDialog
 from views.dialogs.plugin_manager_dialog import PluginManagerDialog
 from views.dialogs.open_project_dialog import OpenProjectDialog
@@ -58,63 +56,59 @@ class MainWindow(QMainWindow):
     e parsers 100% no UI (plugins).
     """
 
-    # fallback mínimo caso não haja parsers instalados
     FALLBACK_EXTENSIONS = {".ks", ".txt", ".ast"}
 
-    def __init__(self, core_client, app_version: str = "0.0.0"):
+    def __init__(self, core_client, app_version: str = "0.0.0", app_name: str = "SekaiTranslatorV"):
         super().__init__()
 
         self.core = core_client
         self.app_version = (app_version or "0.0.0").strip() or "0.0.0"
+        self.app_name = (app_name or "SekaiTranslatorV").strip() or "SekaiTranslatorV"
         self.current_project: dict | None = None
 
-        # services
         self.search_service = SearchReplaceService(self)
 
-        # auth state
+        try:
+            from version import UPDATE_OWNER, UPDATE_REPO
+        except Exception:
+            UPDATE_OWNER, UPDATE_REPO = "Satonix", "SekaiTranslatorV"
+        self.update_service = GitHubReleaseUpdater(
+            owner=UPDATE_OWNER,
+            repo=UPDATE_REPO,
+            current_version=self.app_version,
+        )
+
         self.current_user: str | None = None
         self.api_token: str | None = None
         self.user_data: dict | None = None
 
-        # path -> FileTab
         self._open_files: dict[str, FileTab] = {}
 
-        # Async AI translation state (evita GC)
         self._ai_thread: QThread | None = None
         self._ai_worker: AITranslateWorker | None = None
         self._ai_progress: ProgressDialog | None = None
 
-        # Contexto do batch atual
         self._ai_ctx: dict | None = None
 
-        self.setWindowTitle("SekaiTranslator")
+        self.setWindowTitle(self.app_name)
         self.resize(1500, 900)
 
         self._build_ui()
         self._build_menu()
         self._build_status_bar()
 
-        # restaura login salvo (se existir)
         self._restore_login_from_settings()
 
         self._refresh_account_menu()
         self._refresh_project_state()
 
-        # tenta abrir o último projeto automaticamente
         self._auto_open_last_project()
 
-        # Atualiza estado de ações quando trocar de tab
         self.tabs.currentChanged.connect(lambda *_: self._refresh_project_state())
 
-        # Auto-update (GitHub Releases)
         QTimer.singleShot(1500, self._auto_check_updates)
 
-    # ============================================================
-    # Settings
-    # ============================================================
     def _entry_translation_text(self, e: dict) -> str:
-        # Compat: após separar Search/Replace para SearchReplaceService,
-        # algumas rotas ainda chamam este helper no MainWindow.
         return self.search_service._entry_translation_text(e)
 
     def _settings(self) -> QSettings:
@@ -136,9 +130,6 @@ class MainWindow(QMainWindow):
         except Exception:
             return ""
 
-    # ============================================================
-    # Auth restore / URLs
-    # ============================================================
     def _restore_login_from_settings(self) -> None:
         """
         Restaura token + dados básicos (se existirem).
@@ -187,14 +178,10 @@ class MainWindow(QMainWindow):
 
         return "https://green-gaur-846876.hostingersite.com/api/proxy.php"
 
-    # ============================================================
-    # UI
-    # ============================================================
     def _build_ui(self):
         self.main_splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(self.main_splitter)
 
-        # LEFT: Tree
         tree_container = QWidget()
         tree_layout = QVBoxLayout(tree_container)
         tree_layout.setContentsMargins(6, 6, 6, 6)
@@ -222,7 +209,6 @@ class MainWindow(QMainWindow):
         tree_layout.addWidget(self.tree)
         self.main_splitter.addWidget(tree_container)
 
-        # RIGHT: Tabs
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.tabs.setMovable(True)
@@ -232,13 +218,9 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(self.tabs)
         self.main_splitter.setSizes([300, 1200])
 
-    # ============================================================
-    # Menu Bar
-    # ============================================================
     def _build_menu(self):
         menubar = self.menuBar()
 
-        # ---------- Arquivo ----------
         file_menu = menubar.addMenu("Arquivo")
         self.action_open_project = file_menu.addAction("Abrir Projeto", self._open_project)
         self.action_create_project = file_menu.addAction("Criar Projeto", self._create_project)
@@ -270,7 +252,6 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         self.action_exit = file_menu.addAction("Sair", self.close)
 
-        # ---------- Editar ----------
         edit_menu = menubar.addMenu("Editar")
 
         self.action_undo = edit_menu.addAction("Desfazer", self._undo_current)
@@ -286,7 +267,6 @@ class MainWindow(QMainWindow):
         self.action_search.setShortcut(QKeySequence.Find)
         self.action_search.setShortcutContext(Qt.ApplicationShortcut)
 
-        # ---------- Ferramentas ----------
         tools_menu = menubar.addMenu("Ferramentas")
 
         self.action_translate_ai = tools_menu.addAction(
@@ -299,32 +279,23 @@ class MainWindow(QMainWindow):
         self.action_glossary = tools_menu.addAction("Glossário", self._open_glossary)
         self.action_tm = tools_menu.addAction("Memória de Tradução", self._open_tm)
 
-        # ---------- Plugins ----------
         plugins_menu = menubar.addMenu("Extensões")
         self.action_plugins = plugins_menu.addAction("Gerenciar Extensões", self._open_plugins)
 
-        # ---------- Preferências ----------
         prefs_menu = menubar.addMenu("Preferências")
         self.action_prefs = prefs_menu.addAction("Configurações...", self._open_preferences)
 
-        # ---------- Ajuda ----------
         help_menu = menubar.addMenu("Ajuda")
         self.action_about = help_menu.addAction("Sobre", self._open_about)
+        self.action_check_updates = help_menu.addAction("Verificar atualizações...", self._check_updates_now)
 
-        # ---------- Conta ----------
         self.account_menu = menubar.addMenu("Conta")
         self.action_login = self.account_menu.addAction("Login", self._login)
         self.action_logout = self.account_menu.addAction("Logout", self._logout)
 
-    # ============================================================
-    # Status Bar
-    # ============================================================
     def _build_status_bar(self):
         self.statusBar().showMessage("Pronto")
 
-    # ============================================================
-    # Parsers: supported extensions
-    # ============================================================
     def _supported_extensions(self) -> set[str]:
         """
         Retorna extensões suportadas pelos parsers instalados (lowercase).
@@ -353,21 +324,15 @@ class MainWindow(QMainWindow):
             if os.path.isdir(path):
                 return False
             size = os.path.getsize(path)
-            if size > 5 * 1024 * 1024:  # 5MB
+            if size > 5 * 1024 * 1024:
                 return False
         except Exception:
             pass
         return True
 
-    # ============================================================
-    # Tree handlers
-    # ============================================================
     def _on_tree_double_clicked(self, index):
         self._open_file(index)
 
-    # ============================================================
-    # Tabs close
-    # ============================================================
     def _close_tab(self, index: int):
         widget = self.tabs.widget(index)
 
@@ -400,9 +365,6 @@ class MainWindow(QMainWindow):
 
         self._refresh_project_state()
 
-    # ============================================================
-    # Helpers: current tab
-    # ============================================================
     def _current_file_tab(self) -> FileTab | None:
         w = self.tabs.currentWidget()
         if isinstance(w, FileTab):
@@ -426,9 +388,6 @@ class MainWindow(QMainWindow):
             name = f"● {name}"
         self.tabs.setTabText(idx, name)
 
-    # ============================================================
-    # Project path normalization
-    # ============================================================
     def _normalize_project_paths(self, project: dict) -> dict:
         pp = (project.get("project_path") or "").strip()
         if pp:
@@ -440,9 +399,6 @@ class MainWindow(QMainWindow):
 
         return project
 
-    # ============================================================
-    # Project lifecycle
-    # ============================================================
     def _open_project(self):
         dlg = OpenProjectDialog(self.core, self)
         if not dlg.exec():
@@ -500,9 +456,6 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    # ============================================================
-    # Project settings dialog (salva no core: project.save)
-    # ============================================================
     def _open_project_settings(self):
         if not self.current_project:
             QMessageBox.information(
@@ -546,9 +499,6 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             self._refresh_project_state()
 
-    # ============================================================
-    # File opening
-    # ============================================================
     def _open_file(self, index):
         if not self.current_project:
             return
@@ -590,17 +540,14 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Erro", f"Falha no parse: {e}")
             return
 
-        # cria a aba ANTES de setar campos extras
         tab = FileTab(self)
         tab.file_path = path
 
-        # trava parser/ctx usados no parse para export consistente
         tab.parser = parser
         tab.parse_ctx = ctx
 
         tab.set_entries(entries)
 
-        # aplica estado salvo por cima do parse
         tab.load_project_state_if_exists(self.current_project)
 
         tab.dirtyChanged.connect(lambda *_: self._update_tab_title(tab))
@@ -613,9 +560,6 @@ class MainWindow(QMainWindow):
         self._refresh_project_state()
 
 
-    # ============================================================
-    # SAVE / EXPORT
-    # ============================================================
     def _save_all_open_files_state(self):
         if not self.current_project:
             return
@@ -644,7 +588,6 @@ class MainWindow(QMainWindow):
         parser = getattr(tab, "parser", None)
         ctx = getattr(tab, "parse_ctx", None)
 
-        # fallback defensivo, caso a aba venha de algum caminho antigo
         if parser is None or ctx is None:
             encoding = (self.current_project.get("encoding") or "utf-8").strip() or "utf-8"
             try:
@@ -697,7 +640,7 @@ class MainWindow(QMainWindow):
                     parser = select_parser(self.current_project, src_path, text)
 
                     try:
-                        ctx = ParseContext(file_path=src_path, project=self.current_project, original_text=text)  # type: ignore
+                        ctx = ParseContext(file_path=src_path, project=self.current_project, original_text=text)
                     except TypeError:
                         ctx = ParseContext(file_path=src_path, project=self.current_project)
 
@@ -735,9 +678,6 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage("Exportação em lote finalizada", 3000)
 
-    # ============================================================
-    # Undo/Redo
-    # ============================================================
     def _undo_current(self):
         tab = self._current_file_tab()
         if tab:
@@ -748,9 +688,6 @@ class MainWindow(QMainWindow):
         if tab:
             tab.redo()
 
-    # ============================================================
-    # AI translate (mantive como você enviou)
-    # ============================================================
     def _translate_current_file_with_ai(self):
         tab = self._current_file_tab()
         if not tab or not self.current_project:
@@ -1006,9 +943,6 @@ class MainWindow(QMainWindow):
 
         self._refresh_project_state()
 
-    # ============================================================
-    # Account
-    # ============================================================
     def _login(self):
         dlg = LoginDialog(self)
         if dlg.exec():
@@ -1045,9 +979,6 @@ class MainWindow(QMainWindow):
             self.action_login.setVisible(True)
             self.action_logout.setVisible(False)
 
-    # ============================================================
-    # Dialogs
-    # ============================================================
     def _open_plugins(self):
         PluginManagerDialog(self).exec()
 
@@ -1061,14 +992,30 @@ class MainWindow(QMainWindow):
         TranslationMemoryDialog(self).exec()
 
     def _open_about(self):
-        AboutDialog(self).exec()
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Sobre")
+        msg.setIcon(QMessageBox.Information)
+
+        msg.setText(
+            f"{self.app_name}\n"
+            f"Versão {self.app_version}"
+        )
+
+        msg.setInformativeText("Ferramenta de tradução de Visual Novels.")
+
+        btn_check = msg.addButton("Verificar atualizações...", QMessageBox.ActionRole)
+        msg.addButton(QMessageBox.Ok)
+
+        msg.exec()
+
+        if msg.clickedButton() == btn_check:
+            self._check_updates_now()
+
 
     def _open_preferences(self):
         PreferencesDialog(self).exec()
 
-    # ============================================================
-    # Search (Ctrl+F)
-    # ============================================================
+
     def _open_search(self):
         """Abre o diálogo de busca (Ctrl+F)."""
         allow_project = bool(self.current_project)
@@ -1091,17 +1038,6 @@ class MainWindow(QMainWindow):
                 pass
 
         dlg.exec()
-
-
-
-
-
-
-
-
-
-
-
 
     def _replace_all_in_open_tab(self, tab: FileTab, rx: re.Pattern, repl: str) -> int:
         entries = getattr(tab, "_entries", []) or []
@@ -1168,7 +1104,6 @@ class MainWindow(QMainWindow):
 
                     abs_path = os.path.abspath(path)
 
-                    # If open, edit in-memory.
                     tab = self._open_files.get(abs_path)
                     if tab is not None:
                         total_replacements += int(self._replace_all_in_open_tab(tab, rx, repl) or 0)
@@ -1183,7 +1118,6 @@ class MainWindow(QMainWindow):
                     except Exception:
                         continue
 
-                    # apply saved state (so we can replace in translation field)
                     try:
                         st = project_state_store.load_file_state(self.current_project, abs_path)
                         if st and getattr(st, "entries", None):
@@ -1260,13 +1194,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    # ============================================================
-    # Close behavior
-    # ============================================================
-    
-    # =================================================
-    # Sync export/import (offline collaboration)
-    # =================================================
+
     def _export_sync(self):
         if not self.current_project:
             QMessageBox.information(self, "Sincronização", "Nenhum projeto aberto.")
@@ -1324,7 +1252,6 @@ class MainWindow(QMainWindow):
             msg = "Aviso: project_id diferente (possível projeto diferente).\n\n" + msg
 
         if report.conflicts:
-            # write conflict report next to imported file
             rep_path = path + ".conflicts.json"
             try:
                 with open(rep_path, "w", encoding="utf-8") as f:
@@ -1335,11 +1262,9 @@ class MainWindow(QMainWindow):
 
         QMessageBox.information(self, "Sincronização", msg)
 
-        # refresh current open tab state if any
         self._refresh_open_tabs_from_state()
 
     def _refresh_open_tabs_from_state(self):
-        # Reload state into open tabs to reflect imported progress
         try:
             for i in range(self.tabs.count()):
                 tab = self.tabs.widget(i)
@@ -1350,7 +1275,6 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         try:
-            # Bloqueia fechar durante tradução IA
             if self._ai_thread is not None:
                 QMessageBox.information(self, "Tradução", "Aguarde a tradução terminar antes de fechar.")
                 event.ignore()
@@ -1361,7 +1285,6 @@ class MainWindow(QMainWindow):
                     if getattr(tab, "is_dirty", False):
                         return True
 
-                    # Fallback: sessão de edição ativa com mudanças pendentes
                     try:
                         ed = getattr(tab, "editor", None)
                         sess = getattr(ed, "_session", None)
@@ -1412,46 +1335,93 @@ class MainWindow(QMainWindow):
                             return
 
         except Exception:
-            # mantém o fechamento normal se algo inesperado ocorrer
             pass
 
         super().closeEvent(event)
         
     def _auto_check_updates(self):
+        """
+        Checa updates automaticamente no início, mas sempre pergunta antes de instalar.
+        Nunca deve quebrar o app.
+        """
         try:
-            from services.update_service import GitHubUpdater
-
-            # ajuste se você já tiver APP_VERSION em outro lugar
-            current_version = getattr(self, "app_version", "0.1.0")
-
-            updater = GitHubUpdater(
-                owner="Satonix",
-                repo="SekaiTranslatorV",
-                current_version=current_version,
-            )
-
-            info = updater.fetch_latest()
+            info = self.update_service.fetch_latest()
             if not info:
                 return
 
-            from PySide6.QtWidgets import QMessageBox
+            notes = (info.notes or "").strip()
 
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Atualização disponível")
-            msg.setText(
-                f"Nova versão disponível: {info.version}\n\n"
-                f"Você está usando: {current_version}\n\n"
-                "Deseja atualizar agora?"
+            details = (
+                f"Nova versão disponível: {info.version}\n"
+                f"Você está usando: {self.app_version}\n\n"
             )
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            msg.setDefaultButton(QMessageBox.Yes)
 
-            if msg.exec() == QMessageBox.Yes:
-                updater.download_and_install(info)
-                from PySide6.QtWidgets import QApplication
-                QApplication.quit()
+            if notes:
+                details += notes[:1200] + ("..." if len(notes) > 1200 else "") + "\n\n"
+
+            res = QMessageBox.question(
+                self,
+                "Atualização disponível",
+                details + "Deseja baixar e instalar agora?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+
+            if res != QMessageBox.Yes:
+                return
+
+            self.update_service.download_and_install(info)
+            QApplication.quit()
 
         except Exception:
-            # nunca deixar update quebrar o app
-            pass
+            return
 
+
+    def _check_updates_now(self):
+        """
+        Checagem manual via menu Ajuda -> Verificar atualizações...
+        """
+        try:
+            info = self.update_service.fetch_latest()
+            if not info:
+                QMessageBox.information(
+                    self,
+                    "Atualizações",
+                    "Você já está na versão mais recente."
+                )
+                return
+
+            notes = (info.notes or "").strip()
+
+            details = (
+                f"Nova versão disponível: {info.version}\n"
+                f"Você está usando: {self.app_version}\n\n"
+            )
+
+            if notes:
+                details += (
+                    notes[:2000] +
+                    ("..." if len(notes) > 2000 else "") +
+                    "\n\n"
+                )
+
+            res = QMessageBox.question(
+                self,
+                "Atualização disponível",
+                details + "Deseja baixar e instalar agora?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+
+            if res != QMessageBox.Yes:
+                return
+
+            self.update_service.download_and_install(info)
+            QApplication.quit()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Erro ao verificar atualizações",
+                str(e)
+            )

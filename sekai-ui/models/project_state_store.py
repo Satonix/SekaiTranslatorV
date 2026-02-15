@@ -27,7 +27,6 @@ def _safe_relpath(root: str, path: str) -> str:
         rel = os.path.relpath(path, root)
     except Exception:
         rel = os.path.basename(path)
-    # normaliza separadores para virar chave estável no Windows
     rel = rel.replace("\\", "/")
     return rel
 
@@ -39,7 +38,6 @@ def _appdata_base_dir() -> str:
     base = os.environ.get("LOCALAPPDATA", "")
     if base:
         return os.path.join(base, "SekaiTranslator")
-    # fallback (dev)
     return os.path.abspath(os.path.join(".", ".sekai_local"))
 
 

@@ -19,7 +19,7 @@ def _load_module_from_file(module_name: str, file_path: Path) -> ModuleType:
 
     mod = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = mod
-    spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+    spec.loader.exec_module(mod)
     return mod
 
 
@@ -63,7 +63,6 @@ def _plugin_from_module(mod: ModuleType) -> Optional[Any]:
     3) classes com nome comum: KirikiriKsPlugin, PlainTextPlugin, Plugin, Parser
     4) primeira classe no módulo que pareça plugin
     """
-    # 1) factory explícita
     gp = getattr(mod, "get_plugin", None)
     if callable(gp):
         try:
@@ -73,12 +72,10 @@ def _plugin_from_module(mod: ModuleType) -> Optional[Any]:
         except Exception:
             pass
 
-    # 2) instância pronta
     inst = getattr(mod, "PLUGIN", None)
     if _looks_like_parser_plugin(inst):
         return inst
 
-    # 3) nomes comuns (inclui seus plugins reais)
     preferred_class_names = (
         "KirikiriKsPlugin",
         "PlainTextPlugin",
@@ -91,7 +88,6 @@ def _plugin_from_module(mod: ModuleType) -> Optional[Any]:
         if _looks_like_parser_plugin(obj):
             return obj
 
-    # 4) primeiro candidato no módulo
     for _, cls in inspect.getmembers(mod, inspect.isclass):
         obj = _safe_instantiate(cls)
         if _looks_like_parser_plugin(obj):
@@ -105,7 +101,6 @@ def load_plugin_from_plugin_py(plugin_py: str | Path, *, unique_name: str) -> An
     if not plugin_py.exists():
         raise FileNotFoundError(str(plugin_py))
 
-    # nome do módulo realmente único (evita reaproveitar sys.modules sem querer)
     unique_name = (unique_name or "sekai_parser").strip()
     if not unique_name:
         unique_name = "sekai_parser"
@@ -119,7 +114,6 @@ def load_plugin_from_plugin_py(plugin_py: str | Path, *, unique_name: str) -> An
     if not pid:
         raise RuntimeError(f"plugin_id missing in {plugin_py}")
 
-    # normaliza extensions se vier em formato estranho
     exts = getattr(plugin, "extensions", None)
     try:
         if exts is None:
@@ -127,7 +121,6 @@ def load_plugin_from_plugin_py(plugin_py: str | Path, *, unique_name: str) -> An
         else:
             plugin.extensions = {str(e).lower() for e in exts if str(e).strip()}
     except Exception:
-        # se não der pra setar, segue (autodetect lida com isso)
         pass
 
     return plugin

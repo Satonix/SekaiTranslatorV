@@ -23,15 +23,12 @@ pub struct PipelineReport {
 }
 
 pub fn run(entries: &mut [CoreEntry], cfg: PipelineConfig) -> Result<PipelineReport, String> {
-    // Carregar Translation Memory
     let mut tm_entries = store::load();
 
     let mut used_tm = 0usize;
 
-    // Índices que precisam de IA
     let mut ai_needed: Vec<usize> = Vec::new();
 
-    // Tentar TM (match exato)
     for (i, e) in entries.iter_mut().enumerate() {
         if !e.is_translatable {
             continue;
@@ -44,17 +41,14 @@ pub fn run(entries: &mut [CoreEntry], cfg: PipelineConfig) -> Result<PipelineRep
             e.status = EntryStatus::Translated;
             used_tm += 1;
         } else {
-            // Não tem TM: precisa IA
             ai_needed.push(i);
         }
     }
 
-    // IA (apenas entradas sem TM)
     let mut ai_report: Option<AiRunReport> = None;
     let mut used_ai = 0usize;
 
     if !ai_needed.is_empty() {
-        // Clonar apenas o necessário para IA (mantém entry_id para mapear resultado)
         let mut slice: Vec<CoreEntry> = ai_needed.iter().map(|&i| entries[i].clone()).collect();
 
         let cfg_ai = ai::AiConfig {
@@ -67,14 +61,11 @@ pub fn run(entries: &mut [CoreEntry], cfg: PipelineConfig) -> Result<PipelineRep
 
         let report = ai::translate_entries(&mut slice, cfg_ai)?;
 
-        // Mapa entry_id -> ok (para saber quem realmente traduziu)
-        // Observação: isso depende de AiItemResult ter `entry_id` e `ok`.
         let mut ok_by_id: HashMap<String, bool> = HashMap::new();
         for item in &report.items {
             ok_by_id.insert(item.entry_id.clone(), item.ok);
         }
 
-        // Aplicar resultados (SÓ quando ok == true e texto não vazio)
         for (&idx, translated) in ai_needed.iter().zip(slice.into_iter()) {
             let target = &mut entries[idx];
 
@@ -85,7 +76,6 @@ pub fn run(entries: &mut [CoreEntry], cfg: PipelineConfig) -> Result<PipelineRep
                 target.status = EntryStatus::Translated;
                 used_ai += 1;
 
-                // Salvar na TM apenas quando deu certo
                 let norm = normalize::normalize(&target.original);
                 let h = hash::hash_norm(&norm);
 
@@ -98,14 +88,9 @@ pub fn run(entries: &mut [CoreEntry], cfg: PipelineConfig) -> Result<PipelineRep
                     hash: h,
                 });
             } else {
-                // Falhou: não força status Translated, não polui TM.
-                // Mantém o estado coerente (se não tem tradução, volta para Untranslated).
                 if target.translation.trim().is_empty() {
                     target.status = EntryStatus::Untranslated;
                 } else {
-                    // Se tinha alguma coisa (ex.: já havia tradução anterior), não rebaixa à toa.
-                    // Você pode escolher manter Translated se já estava, mas o mais seguro:
-                    // manter como InProgress (ou deixar como estava). Aqui deixo InProgress.
                     target.status = EntryStatus::InProgress;
                 }
             }
@@ -114,7 +99,6 @@ pub fn run(entries: &mut [CoreEntry], cfg: PipelineConfig) -> Result<PipelineRep
         ai_report = Some(report);
     }
 
-    // Salvar TM
     store::save(&tm_entries)?;
 
     Ok(PipelineReport {

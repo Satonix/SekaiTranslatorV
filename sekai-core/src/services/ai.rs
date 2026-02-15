@@ -29,7 +29,6 @@ fn backoff(attempt: usize) -> Duration {
 
 fn endpoint_for(provider: &str) -> Result<&'static str, String> {
     match provider {
-        // Nota: /v1/chat/completions ainda é válido; você pode migrar depois.
         "openai" => Ok("https://api.openai.com/v1/chat/completions"),
         "deepseek" => Ok("https://api.deepseek.com/v1/chat/completions"),
         _ => Err("Unsupported provider".into()),
@@ -50,14 +49,12 @@ pub fn translate_entries(entries: &mut [CoreEntry], cfg: AiConfig) -> Result<AiR
         items: Vec::new(),
     };
 
-    // Coletar índices traduzíveis
     let translatable_indices: Vec<usize> = entries
         .iter()
         .enumerate()
         .filter_map(|(i, e)| if e.is_translatable { Some(i) } else { None })
         .collect();
 
-    // Processar em batches
     let mut batch: Vec<usize> = Vec::with_capacity(BATCH_SIZE);
 
     for idx in translatable_indices {
@@ -87,8 +84,6 @@ fn process_batch(
     for &i in batch_idx {
         let e = &mut entries[i];
 
-        // Dá para pular itens já traduzidos:
-        // if !e.translation.trim().is_empty() { continue; }
 
         let prompt = build_prompt(e, cfg);
 
@@ -115,7 +110,6 @@ fn process_batch(
                 Ok(resp) => {
                     let status = resp.status();
 
-                    // Lê como texto primeiro: isso evita perder mensagem de erro quando JSON falha
                     let text = match resp.text() {
                         Ok(t) => t,
                         Err(err) => {
@@ -126,7 +120,6 @@ fn process_batch(
                     };
 
                     if !status.is_success() {
-                        // Erro HTTP: tenta extrair mensagem do JSON, senão guarda o corpo bruto
                         last_err = Some(extract_error_message(status, &text));
                         if should_retry_http(status) && attempt + 1 < MAX_RETRIES {
                             thread::sleep(backoff(attempt));
@@ -200,14 +193,12 @@ fn process_batch(
 }
 
 fn should_retry_http(status: StatusCode) -> bool {
-    // 408/429/5xx tipicamente são temporários
     status == StatusCode::REQUEST_TIMEOUT
         || status == StatusCode::TOO_MANY_REQUESTS
         || status.is_server_error()
 }
 
 fn extract_error_message(status: StatusCode, body_text: &str) -> String {
-    // Tenta padrão comum: { "error": { "message": "..." } } ou { "message": "..." }
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(body_text) {
         if let Some(msg) = v
             .get("error")
@@ -221,7 +212,6 @@ fn extract_error_message(status: StatusCode, body_text: &str) -> String {
         }
     }
 
-    // Fallback: corpo bruto (limitado)
     let trimmed = body_text.trim();
     let snippet = if trimmed.len() > 400 {
         format!("{}...", &trimmed[..400])

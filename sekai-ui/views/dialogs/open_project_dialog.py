@@ -25,11 +25,9 @@ class OpenProjectDialog(QDialog):
 
         layout.addWidget(QLabel("<b>Projetos existentes</b>"))
 
-        # Lista de projetos
         self.list = QListWidget()
         layout.addWidget(self.list)
 
-        # Botões
         btn_layout = QHBoxLayout()
 
         self.open_btn = QPushButton("Abrir")
@@ -46,13 +44,10 @@ class OpenProjectDialog(QDialog):
 
         layout.addLayout(btn_layout)
 
-        # Eventos
         self.list.itemDoubleClicked.connect(self._open_item)
 
-        # Estado inicial
         self._load_projects()
 
-    # Core interaction
     def _load_projects(self):
         self.list.clear()
 
@@ -79,7 +74,6 @@ class OpenProjectDialog(QDialog):
         self.list.setEnabled(True)
         self.open_btn.setEnabled(True)
 
-        # Ainda não implementados no core
         self.rename_btn.setEnabled(False)
         self.delete_btn.setEnabled(False)
 
@@ -88,7 +82,6 @@ class OpenProjectDialog(QDialog):
             item.setData(Qt.UserRole, p)
             self.list.addItem(item)
 
-    # Actions
     def _open_item(self, item: QListWidgetItem):
         self.project_path = item.data(Qt.UserRole)["project_path"]
         self.accept()
@@ -106,7 +99,6 @@ class OpenProjectDialog(QDialog):
         self.project_path = item.data(Qt.UserRole)["project_path"]
         self.accept()
 
-    # Placeholders (WIP)
     def _rename_wip(self):
         QMessageBox.information(
             self,

@@ -1,4 +1,3 @@
-# views/dialogs/project_settings_dialog.py
 
 from __future__ import annotations
 
@@ -20,7 +19,6 @@ from PySide6.QtWidgets import (
 
 from views.dialogs.project_settings_tab import ProjectSettingsTab
 
-# Parsers (plugin-based)
 from parsers.manager import get_parser_manager
 
 
@@ -57,22 +55,17 @@ class ProjectSettingsDialog(QDialog):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(10)
 
-        # Tabs
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
-        # Projeto (real)
         self.project_tab = ProjectSettingsTab(self)
         self.tabs.addTab(self.project_tab, "Projeto")
 
-        # ✅ injeta seletor de parser na aba Projeto (sem depender do core)
         self._inject_parser_picker(self.project_tab)
 
-        # IA (real)
         self.ai_tab = self._build_ai_tab()
         self.tabs.addTab(self.ai_tab, "IA")
 
-        # Engine (placeholder)
         self.tabs.addTab(
             self._placeholder_tab(
                 "Configurações específicas da engine do jogo.\n\n"
@@ -81,7 +74,6 @@ class ProjectSettingsDialog(QDialog):
             "Engine",
         )
 
-        # Botões
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -96,12 +88,8 @@ class ProjectSettingsDialog(QDialog):
         self.btn_cancel.clicked.connect(self.reject)
         self.btn_save.clicked.connect(self._save)
 
-        # Carrega valores iniciais do projeto
         self._load_from_project()
 
-    # ============================================================
-    # Projeto tab: Parser picker injection
-    # ============================================================
     def _inject_parser_picker(self, tab: QWidget) -> None:
         """
         Adiciona um seletor de parser_id na aba Projeto.
@@ -126,10 +114,8 @@ class ProjectSettingsDialog(QDialog):
             "Se estiver em Auto, o app tentará detectar o melhor parser para cada arquivo."
         )
 
-        # Auto-detect (default)
         self.cmb_parser_id.addItem("Auto-detect (recomendado)", "")
 
-        # Parsers disponíveis (builtin + external)
         mgr = get_parser_manager()
         plugins = []
         for p in mgr.all_plugins():
@@ -138,7 +124,6 @@ class ProjectSettingsDialog(QDialog):
             if pid:
                 plugins.append((pid, name or pid))
 
-        # ordena por nome
         plugins.sort(key=lambda x: x[1].lower())
 
         for pid, name in plugins:
@@ -156,9 +141,6 @@ class ProjectSettingsDialog(QDialog):
 
         layout.addWidget(box)
 
-    # ============================================================
-    # Tabs
-    # ============================================================
     def _build_ai_tab(self) -> QWidget:
         w = QWidget()
         outer = QVBoxLayout(w)
@@ -214,23 +196,17 @@ class ProjectSettingsDialog(QDialog):
         l.addStretch()
         return w
 
-    # ============================================================
-    # Load/Save
-    # ============================================================
     def _load_from_project(self) -> None:
-        # --- Projeto (aba principal) ---
         if hasattr(self, "project_tab"):
             self.project_tab.load_project(self.project)
 
-        # --- parser_id ---
         if hasattr(self, "cmb_parser_id"):
             pid = (self.project.get("parser_id") or "").strip()
             idx = self.cmb_parser_id.findData(pid)
             if idx < 0:
-                idx = self.cmb_parser_id.findData("")  # auto
+                idx = self.cmb_parser_id.findData("")
             self.cmb_parser_id.setCurrentIndex(max(0, idx))
 
-        # --- IA ---
         preset = (self.project.get("ai_prompt_preset") or "default").strip() or "default"
         custom = (self.project.get("ai_custom_prompt_text") or "").strip()
 
@@ -249,23 +225,19 @@ class ProjectSettingsDialog(QDialog):
         self.txt_custom_prompt.setVisible(is_custom)
 
     def _collect_to_project(self) -> None:
-        # --- Projeto (aba principal) ---
         if hasattr(self, "project_tab"):
             self.project_tab.apply_to_project(self.project)
 
-        # --- parser_id ---
         if hasattr(self, "cmb_parser_id"):
             pid = str(self.cmb_parser_id.currentData() or "").strip()
-            self.project["parser_id"] = pid  # "" = auto
+            self.project["parser_id"] = pid
 
-        # --- IA ---
         preset = str(self.cmb_prompt_preset.currentData() or "default").strip() or "default"
         custom = self.txt_custom_prompt.toPlainText().strip()
 
         self.project["ai_prompt_preset"] = preset
         self.project["ai_custom_prompt_text"] = custom if preset == "custom" else ""
 
-    # Actions
     def _save(self):
         """
         Salva no dict do projeto e chama callback opcional.

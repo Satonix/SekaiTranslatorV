@@ -23,7 +23,7 @@ def external_parsers_dir() -> Path:
 
 
 def external_parsers_legacy_dir() -> Path:
-    # compat: versões antigas que colocavam direto em Parsers/
+    
     return parsers_base_dir() / "Parsers"
 
 
@@ -59,7 +59,7 @@ def _discover_from_dir(reg: ParserRegistry, folder: Path, *, source: str, prefix
             plugin = load_plugin_from_plugin_py(plugin_py, unique_name=unique_name)
             reg.register(plugin, source=source)
         except Exception:
-            # parser quebrado não derruba o app
+            
             continue
 
 
@@ -70,10 +70,10 @@ def get_parser_manager(force_reload: bool = False) -> ParserManager:
 
     reg = ParserRegistry()
 
-    # Novo (repo instalado)
+    
     _discover_from_dir(reg, external_parsers_dir(), source="external", prefix="sekai_parser_external")
 
-    # Compat (legado)
+    
     _discover_from_dir(reg, external_parsers_legacy_dir(), source="external", prefix="sekai_parser_external_legacy")
 
     _MANAGER = ParserManager(registry=reg)

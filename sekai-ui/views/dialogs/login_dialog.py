@@ -1,4 +1,3 @@
-# views/dialogs/login_dialog.py
 
 from __future__ import annotations
 
@@ -51,18 +50,15 @@ class LoginDialog(QDialog):
         title.setStyleSheet("font-size: 14px; font-weight: bold;")
         layout.addWidget(title)
 
-        # Usuário
         self.user_edit = QLineEdit()
         self.user_edit.setPlaceholderText("Usuário ou email")
         layout.addWidget(self.user_edit)
 
-        # Senha
         self.pass_edit = QLineEdit()
         self.pass_edit.setPlaceholderText("Senha")
         self.pass_edit.setEchoMode(QLineEdit.Password)
         layout.addWidget(self.pass_edit)
 
-        # Botões
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -75,15 +71,12 @@ class LoginDialog(QDialog):
         layout.addStretch()
         layout.addLayout(btn_layout)
 
-        # Conexões
         self.btn_cancel.clicked.connect(self.reject)
         self.btn_login.clicked.connect(self._on_login)
 
-        # Enter para logar
         self.user_edit.returnPressed.connect(self._on_login)
         self.pass_edit.returnPressed.connect(self._on_login)
 
-        # tenta preencher último user salvo
         try:
             s = self._settings()
             last_user = (s.value("auth/last_username", "") or "").strip()
@@ -93,9 +86,6 @@ class LoginDialog(QDialog):
         except Exception:
             pass
 
-    # -------------------------------------------------
-    # Settings / URLs
-    # -------------------------------------------------
     def _settings(self) -> QSettings:
         return QSettings("SekaiTranslator", "SekaiTranslator")
 
@@ -119,9 +109,6 @@ class LoginDialog(QDialog):
 
         return "https://green-gaur-846876.hostingersite.com/api/auth.php"
 
-    # -------------------------------------------------
-    # HTTP
-    # -------------------------------------------------
     def _post_json(self, url: str, payload: dict, *, timeout: float = 25.0) -> dict:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(
@@ -148,7 +135,6 @@ class LoginDialog(QDialog):
             except Exception:
                 pass
 
-            # tenta extrair message do JSON
             msg = f"HTTP {e.code}"
             try:
                 j = json.loads(raw) if raw else {}
@@ -163,9 +149,6 @@ class LoginDialog(QDialog):
         except Exception as e:
             return {"status": "error", "message": f"Erro inesperado: {e}"}
 
-    # -------------------------------------------------
-    # Actions
-    # -------------------------------------------------
     def _on_login(self):
         user = self.user_edit.text().strip()
         pwd = self.pass_edit.text().strip()
@@ -183,7 +166,6 @@ class LoginDialog(QDialog):
                 timeout=25.0,
             )
 
-            # seu PHP usa: status=success + api_token
             if resp.get("status") != "success":
                 msg = resp.get("message") or "Falha no login."
                 QMessageBox.critical(self, "Login", msg)
@@ -200,7 +182,6 @@ class LoginDialog(QDialog):
             self.api_token = token
             self.user_data = data
 
-            # Persistência
             try:
                 s = self._settings()
                 s.setValue("auth/api_token", token)

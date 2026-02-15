@@ -21,7 +21,6 @@ pub struct EncodingDetectionResult {
 pub fn detect_from_file(path: &Path) -> Result<EncodingDetectionResult, String> {
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
 
-    // BOM UTF-8 (EF BB BF)
     if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
         return Ok(EncodingDetectionResult {
             best: "utf-8-sig".into(),
@@ -52,7 +51,6 @@ pub fn detect_from_file(path: &Path) -> Result<EncodingDetectionResult, String> 
         confidence,
     });
 
-    // Ambiguidades comuns em VN
     if best == "shift_jis" {
         candidates.push(EncodingCandidate {
             name: "windows-31j".into(),

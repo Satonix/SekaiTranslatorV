@@ -6,8 +6,8 @@ from typing import Dict, List, Optional, Any
 
 @dataclass(frozen=True)
 class RegisteredParser:
-    plugin: Any  # duck-typing (Protocol)
-    source: str  # "builtin" | "external"
+    plugin: Any  
+    source: str  
 
 
 class ParserRegistry:
@@ -39,13 +39,13 @@ class ParserRegistry:
         if not pid:
             raise ValueError("Parser plugin_id is required")
 
-        # valida "interface" mínima
+        
         for attr in ("detect", "parse", "rebuild"):
             fn = getattr(plugin, attr, None)
             if not callable(fn):
                 raise ValueError(f"Parser '{pid}' missing callable '{attr}()'")
 
-        # normaliza extensions se vier errado
+        
         exts = getattr(plugin, "extensions", None)
         if exts is None:
             try:
@@ -57,20 +57,20 @@ class ParserRegistry:
                 norm_exts = {str(e).lower() for e in exts if str(e).strip()}
                 setattr(plugin, "extensions", set(norm_exts))
             except Exception:
-                # se não dá pra setar, só ignora (vai ser tratado no autodetect)
+                
                 pass
 
-        # conflito: external > builtin
+        
         existing = self._by_id.get(pid)
         if existing is not None:
             if existing.source == "external" and source != "external":
-                # não deixa builtin sobrescrever external
+                
                 return
 
         self._by_id[pid] = RegisteredParser(plugin=plugin, source=source)
 
     def all(self) -> List[RegisteredParser]:
-        # ordem estável: external primeiro (prioridade), depois builtin, e por plugin_id
+        
         items = list(self._by_id.items())
         items.sort(key=lambda kv: (0 if kv[1].source == "external" else 1, kv[0]))
         return [rp for _, rp in items]

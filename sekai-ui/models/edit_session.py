@@ -20,12 +20,10 @@ class EditSession:
         self._changed_indices: set[int] = set()
         self._active = False
 
-    # Lifecycle
     def start(self, entries: List[dict], rows: List[int]):
         self.entries = entries or []
         self.rows = rows or []
 
-        # Inicializa last_committed se não existir (para Undo correto)
         for e in self.entries:
             if "_last_committed_translation" not in e:
                 e["_last_committed_translation"] = (e.get("translation") or "").strip()
@@ -47,7 +45,6 @@ class EditSession:
     def is_active(self) -> bool:
         return self._active
 
-    # Digitação
     def on_text_edited(self, lines: List[str]):
         """
         Chamado a cada alteração no editor.
@@ -72,7 +69,6 @@ class EditSession:
             else:
                 entry["status"] = "untranslated"
 
-    # Commit
     def commit(self) -> list[int]:
         """
         Confirma traduções.
@@ -97,7 +93,6 @@ class EditSession:
             if not should_commit:
                 continue
 
-            # Aplicar commit (e atualizar snapshot "last committed")
             entry["translation"] = new_text
             entry["status"] = "translated" if new_text else "untranslated"
 

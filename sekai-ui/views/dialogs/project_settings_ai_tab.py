@@ -19,9 +19,8 @@ class ProjectSettingsAITab(QWidget):
       - user_prompt (prompt complementar do usuário)
     """
 
-    # Por enquanto, lista local (você troca depois pra carregar do repo/schema.json)
     PROMPT_PRESETS: dict[str, str] = {
-        "default": "",  # usa só o SYSTEM_PROMPT_BASE do servidor
+        "default": "",
         "natural": "Traduza de forma natural e fluida, mantendo sentido e emoção.",
         "literal": "Traduza de forma mais literal possível, preservando estrutura e termos.",
         "formal": "Traduza com tom mais formal, sem gírias, mantendo clareza.",
@@ -81,7 +80,6 @@ class ProjectSettingsAITab(QWidget):
         custom = self.txt_custom_prompt.toPlainText().strip()
         userp = self.txt_user_prompt.toPlainText().strip()
 
-        # Se custom estiver vazio, usamos o texto do preset (exceto default)
         if not custom:
             custom = self.PROMPT_PRESETS.get(key, "") or ""
 

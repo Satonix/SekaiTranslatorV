@@ -1,4 +1,3 @@
-# parsers/repository.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,8 +11,6 @@ import urllib.request
 import json
 import hashlib
 
-
-# Paths
 def parsers_base_dir() -> Path:
     """
     Base onde ficam os parsers externos.
@@ -37,7 +34,7 @@ def ensure_dirs() -> None:
     repo_dir().mkdir(parents=True, exist_ok=True)
 
 
-# Repo spec
+
 @dataclass(frozen=True)
 class RepoSpec:
     """
@@ -55,7 +52,7 @@ class RepoSpec:
         return f"{base}/archive/refs/heads/{self.branch}.zip"
 
 
-# Download helpers
+
 def _download_to_file(url: str, out_path: Path, timeout: float = 60.0) -> None:
     req = urllib.request.Request(
         url,
@@ -68,12 +65,12 @@ def _download_to_file(url: str, out_path: Path, timeout: float = 60.0) -> None:
     out_path.write_bytes(data)
 
 
-# Repo discovery
+
 def _find_extracted_root(extract_dir: Path) -> Path:
     root_candidates = [p for p in extract_dir.iterdir() if p.is_dir()]
     if not root_candidates:
         raise RuntimeError("ZIP do repo está vazio ou inválido.")
-    # escolhe a pasta maior/mais provável (github: <repo>-<branch>/)
+    
     return max(root_candidates, key=lambda p: sum(1 for _ in p.rglob("*")))
 
 
@@ -91,7 +88,7 @@ def _find_manifest(extracted_root: Path) -> Optional[Path]:
         if c.exists() and c.is_file():
             return c
 
-    # fallback: procura recursivo (limitado)
+    
     try:
         for c in extracted_root.rglob("manifest.json"):
             if c.is_file():
@@ -119,12 +116,12 @@ def _find_plugins_root(extracted_root: Path) -> Optional[Path]:
                 if child.is_dir() and (child / "plugin.py").exists():
                     return c
 
-    # layout flat: <root>/<parser>/plugin.py
+    
     for child in extracted_root.iterdir():
         if child.is_dir() and (child / "plugin.py").exists():
             return extracted_root
 
-    # fallback recursivo: procura ".../plugins" com plugin.py dentro
+    
     for c in extracted_root.rglob("plugins"):
         if not c.is_dir():
             continue
@@ -135,7 +132,7 @@ def _find_plugins_root(extracted_root: Path) -> Optional[Path]:
     return None
 
 
-# Manifest
+
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -175,7 +172,7 @@ def _build_repo_from_manifest(extracted_root: Path, manifest_path: Path) -> Path
             "ou layout flat <parser>/plugin.py."
         )
 
-    # o "folder" do manifest é relativo a plugins_root
+    
     items = manifest.get("items") or []
     built_repo = Path(tempfile.mkdtemp(prefix="sekai_repo_built_"))
 
@@ -197,7 +194,7 @@ def _build_repo_from_manifest(extracted_root: Path, manifest_path: Path) -> Path
         if not plugin_py.exists():
             raise RuntimeError(f"Manifest aponta para '{folder}', mas plugin.py não existe.")
 
-        # valida sha256 do plugin.py se preenchido
+        
         if sha:
             got = _sha256_file(plugin_py)
             if got.lower() != sha:
@@ -247,7 +244,7 @@ def _build_repo_by_discovery(extracted_root: Path) -> Path:
     return built_repo
 
 
-# Atomic replace
+
 def _atomic_replace_dir(src: Path, dst: Path) -> None:
     """
     Substitui dst por src de forma segura (best-effort).
@@ -268,10 +265,10 @@ def _atomic_replace_dir(src: Path, dst: Path) -> None:
             shutil.move(str(dst), str(backup))
 
         shutil.move(str(staging), str(dst))
-        # backup some junto com o temp dir
+        
 
 
-# Public API
+
 def install_from_github_zip(repo_url: str, *, branch: str = "main") -> Path:
     """
     Baixa o ZIP do GitHub e instala em %LOCALAPPDATA%/SekaiTranslator/Parsers/repo
@@ -304,7 +301,7 @@ def install_from_github_zip(repo_url: str, *, branch: str = "main") -> Path:
 
         _atomic_replace_dir(built_repo, repo_dir())
 
-        # limpa o built_repo temporário (criado por mkdtemp)
+        
         try:
             shutil.rmtree(built_repo, ignore_errors=True)
         except Exception:
@@ -360,7 +357,7 @@ def remove_external_parser(parser_folder_or_id: str) -> bool:
         shutil.rmtree(direct, ignore_errors=True)
         return True
 
-    # fallback: procura pelo nome de pasta
+    
     for child in rd.iterdir():
         if child.is_dir() and (child / "plugin.py").exists() and child.name == name:
             shutil.rmtree(child, ignore_errors=True)

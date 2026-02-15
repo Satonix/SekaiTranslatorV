@@ -19,9 +19,7 @@ class EditorGutter(QWidget):
         self.editor = editor
         self.update_width()
 
-    # Layout
     def update_width(self, *_):
-        # largura suficiente para: "1234. Personagem"
         self.setFixedWidth(120)
 
     def update_area(self, rect, dy):
@@ -33,7 +31,6 @@ class EditorGutter(QWidget):
     def update_scroll(self, _):
         self.update()
 
-    # Paint
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.fillRect(event.rect(), QColor(24, 24, 24))
@@ -70,7 +67,7 @@ class EditorGutter(QWidget):
                 if speaker_text:
                     text += f" {speaker_text}"
 
-                painter.setPen(QColor(156, 163, 175))  # cinza Sekai
+                painter.setPen(QColor(156, 163, 175))
                 painter.drawText(
                     QRect(
                         0,

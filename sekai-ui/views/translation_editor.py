@@ -21,14 +21,12 @@ class TranslationEditor(QPlainTextEdit):
     jumpNextRequested = Signal()
     jumpPrevRequested = Signal()
 
-    # (Se você usa no EditorPanel)
     undoRequested = Signal()
     redoRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Visual
         self.setUndoRedoEnabled(True)
         self.setWordWrapMode(QTextOption.NoWrap)
         self.setLineWrapMode(QPlainTextEdit.NoWrap)
@@ -38,20 +36,17 @@ class TranslationEditor(QPlainTextEdit):
         font.setPointSize(10)
         self.setFont(font)
 
-        # Estado
         self._session: EditSession | None = None
         self._rows: list[int] = []
 
         self.textChanged.connect(self._on_text_changed)
 
-    # Bind
     def bind_edit_session(self, session: EditSession):
         self._session = session
 
     def set_rows(self, rows: list[int]):
         self._rows = rows or []
 
-    # Load
     def load_from_session(self):
         if not self._session or not self._session.is_active():
             self.setPlainText("")
@@ -65,7 +60,6 @@ class TranslationEditor(QPlainTextEdit):
 
         self.verticalScrollBar().setValue(0)
 
-    # Input
     def keyPressEvent(self, event: QKeyEvent):
         if not self._session or not self._session.is_active():
             super().keyPressEvent(event)
@@ -80,7 +74,6 @@ class TranslationEditor(QPlainTextEdit):
         alt = bool(mods & Qt.AltModifier)
         meta = bool(mods & Qt.MetaModifier)
 
-        # Ctrl+Z / Ctrl+Shift+Z (se você estiver usando esses sinais no EditorPanel)
         if ctrl and not alt and not meta and key == Qt.Key_Z:
             if shift:
                 self.redoRequested.emit()
@@ -90,25 +83,21 @@ class TranslationEditor(QPlainTextEdit):
             return
 
         if is_enter and not ctrl and not shift and not alt and not meta:
-            # ENTER → commit
             self.commitRequested.emit()
             event.accept()
             return
 
         if is_enter and ctrl:
-            # CTRL + ENTER → commit + next
             self.commitRequested.emit()
             self.jumpNextRequested.emit()
             event.accept()
             return
 
         if is_enter and shift:
-            # SHIFT + ENTER → next
             self.jumpNextRequested.emit()
             event.accept()
             return
 
-        # BACKSPACE → não remover linha
         if key == Qt.Key_Backspace:
             cursor = self.textCursor()
             if cursor.positionInBlock() == 0 and cursor.block().text() == "":
@@ -158,7 +147,6 @@ class TranslationEditor(QPlainTextEdit):
 
         self._on_text_changed()
 
-    # Sync
     def _on_text_changed(self):
         if not self._session or not self._session.is_active():
             return

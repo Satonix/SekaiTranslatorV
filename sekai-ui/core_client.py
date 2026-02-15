@@ -36,7 +36,6 @@ class SekaiCoreClient:
         self._lock = threading.Lock()
         self._next_id = 1
 
-        # id -> Queue(response)
         self._pending: dict[Any, _Pending] = {}
 
         self._stdout_thread: threading.Thread | None = None
@@ -45,21 +44,18 @@ class SekaiCoreClient:
         self._stderr_lines: "Queue[str]" = Queue()
         self._running = False
 
-    # -------------------------------------------------
-    # Lifecycle
-    # -------------------------------------------------
     def start(self) -> None:
         if self.proc and self.proc.poll() is None:
-            return  # já rodando
+            return
 
         self.proc = subprocess.Popen(
             [self.core_path],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,  # IMPORTANT: não descarte stderr
+            stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
-            bufsize=1,  # line-buffered
+            bufsize=1,
         )
 
         self._running = True
@@ -78,7 +74,6 @@ class SekaiCoreClient:
 
         try:
             if self.proc.poll() is None:
-                # tentativa “limpa”
                 self.proc.terminate()
                 try:
                     self.proc.wait(timeout=1.5)
@@ -86,13 +81,9 @@ class SekaiCoreClient:
                     self.proc.kill()
                     self.proc.wait(timeout=1.5)
         finally:
-            # acorda qualquer request pendente
             self._fail_all_pending("core process stopped")
             self.proc = None
 
-    # -------------------------------------------------
-    # Public API
-    # -------------------------------------------------
     def send(self, cmd: str, payload: dict | None = None, *, timeout: float | None = None) -> dict:
         """
         Envia um comando e aguarda a resposta correspondente (mesmo id).
@@ -115,7 +106,6 @@ class SekaiCoreClient:
         try:
             self._write_line(json.dumps(msg, ensure_ascii=False))
         except Exception as e:
-            # remove pendência e falha com erro claro
             with self._lock:
                 self._pending.pop(req_id, None)
             raise RuntimeError(f"failed to send to sekai-core: {e}") from e
@@ -125,7 +115,6 @@ class SekaiCoreClient:
         try:
             resp = q.get(timeout=wait_timeout)
         except Empty:
-            # tentativa de enriquecer diagnóstico com stderr recente
             stderr_tail = self._drain_stderr_tail(max_lines=8)
             with self._lock:
                 self._pending.pop(req_id, None)
@@ -147,9 +136,6 @@ class SekaiCoreClient:
         max_lines = max(1, int(max_lines))
         return self._drain_stderr_tail(max_lines=max_lines)
 
-    # -------------------------------------------------
-    # Internals: IO
-    # -------------------------------------------------
     def _write_line(self, line: str) -> None:
         if not self.proc or not self.proc.stdin:
             raise RuntimeError("stdin not available")
@@ -157,7 +143,6 @@ class SekaiCoreClient:
         if self.proc.poll() is not None:
             raise RuntimeError("sekai-core process exited")
 
-        # sempre newline
         self.proc.stdin.write(line + "\n")
         self.proc.stdin.flush()
 
@@ -176,15 +161,12 @@ class SekaiCoreClient:
             try:
                 msg = json.loads(line)
             except Exception:
-                # Se o core imprimir algo que não seja JSON por stdout,
-                # preferimos ignorar para não quebrar a UI.
                 continue
 
             msg_id = msg.get("id", None)
             if msg_id is None:
                 continue
 
-            # Normaliza: se vier "1" como string, tenta virar int
             key: Any = msg_id
             if isinstance(msg_id, str) and msg_id.isdigit():
                 key = int(msg_id)
@@ -198,10 +180,8 @@ class SekaiCoreClient:
                 except Exception:
                     pass
             else:
-                # resposta sem request pendente -> ignora
                 pass
 
-        # stdout acabou -> core morreu ou fechou
         self._fail_all_pending("core stdout closed")
 
     def _read_stderr(self) -> None:
@@ -215,9 +195,6 @@ class SekaiCoreClient:
             if line:
                 self._stderr_lines.put(line)
 
-    # -------------------------------------------------
-    # Internals: ids / pending
-    # -------------------------------------------------
     def _alloc_id(self) -> int:
         with self._lock:
             rid = self._next_id
@@ -247,14 +224,12 @@ class SekaiCoreClient:
         max_lines = max(1, int(max_lines))
         lines: list[str] = []
 
-        # drena tudo que tiver
         while True:
             try:
                 lines.append(self._stderr_lines.get_nowait())
             except Empty:
                 break
 
-        # retorna tail
         if len(lines) <= max_lines:
             return lines
         return lines[-max_lines:]

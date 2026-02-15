@@ -1,4 +1,3 @@
-# views/workers/ai_translate_worker.py
 from __future__ import annotations
 
 import json
@@ -22,7 +21,7 @@ class AITranslateWorker(QObject):
       - failed(str) em erro
       - canceled() se cancelado
     """
-    progress = Signal(int, int)   # done, total
+    progress = Signal(int, int)
     finished = Signal(dict)
     failed = Signal(str)
     canceled = Signal()
@@ -46,9 +45,6 @@ class AITranslateWorker(QObject):
         self.chunk_size = max(1, int(chunk_size or 1))
         self._cancel_requested = False
 
-    # -----------------------------
-    # Cancel
-    # -----------------------------
     @Slot()
     def cancel(self) -> None:
         self._cancel_requested = True
@@ -56,9 +52,6 @@ class AITranslateWorker(QObject):
     def _is_canceled(self) -> bool:
         return bool(self._cancel_requested)
 
-    # -----------------------------
-    # Run
-    # -----------------------------
     @Slot()
     def run(self) -> None:
         try:
@@ -80,7 +73,6 @@ class AITranslateWorker(QObject):
             if not target_language:
                 raise RuntimeError("Payload inválido: 'target_language' vazio.")
 
-            # Opcional: repassa parâmetros adicionais se existirem
             custom_prompt_text = self.payload.get("custom_prompt_text")
             user_prompt = self.payload.get("user_prompt")
 
@@ -88,7 +80,6 @@ class AITranslateWorker(QObject):
             done = 0
             self.progress.emit(done, total)
 
-            # processa em chunks para permitir progresso real
             for start in range(0, total, self.chunk_size):
                 if self._is_canceled():
                     self.canceled.emit()
@@ -118,7 +109,6 @@ class AITranslateWorker(QObject):
                 if not (isinstance(resp, dict) and isinstance(resp.get("results"), list)):
                     raise RuntimeError("Resposta inesperada do proxy: esperado dict com 'results' list.")
 
-                # acumula resultados
                 for r in resp["results"]:
                     if isinstance(r, dict):
                         results.append(r)
@@ -126,15 +116,11 @@ class AITranslateWorker(QObject):
                 done = min(total, done + len(chunk))
                 self.progress.emit(done, total)
 
-            # Padroniza saída final
             self.finished.emit({"results": results})
 
         except Exception as e:
             self.failed.emit(str(e))
 
-    # -----------------------------
-    # HTTP
-    # -----------------------------
     def _post_json_bearer(self, url: str, token: str, payload: dict, *, timeout: float = 120.0) -> dict:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(

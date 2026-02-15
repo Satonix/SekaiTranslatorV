@@ -12,7 +12,6 @@ pub fn run(entries: &[CoreEntry]) -> Vec<QaIssue> {
     let mut issues: Vec<QaIssue> = Vec::new();
 
     for e in entries {
-        // QA só faz sentido para linhas traduzíveis
         if !e.is_translatable {
             continue;
         }
@@ -20,7 +19,6 @@ pub fn run(entries: &[CoreEntry]) -> Vec<QaIssue> {
         let original_trim = e.original.trim();
         let translation_trim = e.translation.trim();
 
-        // Tradução idêntica ao original (normalizando trim)
         if !translation_trim.is_empty() && translation_trim == original_trim {
             issues.push(QaIssue {
                 entry_id: e.entry_id.clone(),
@@ -29,9 +27,6 @@ pub fn run(entries: &[CoreEntry]) -> Vec<QaIssue> {
             });
         }
 
-        // Contexto ausente (edge-case real: entrada traduzível
-        // sem prefix/suffix - pode quebrar rebuild para engines
-        // que dependem do wrapper)
         if e.prefix.is_none() && e.suffix.is_none() {
             issues.push(QaIssue {
                 entry_id: e.entry_id.clone(),
@@ -40,7 +35,6 @@ pub fn run(entries: &[CoreEntry]) -> Vec<QaIssue> {
             });
         }
 
-        // Speaker definido mas texto vazio (ou whitespace)
         if e.speaker.is_some() && original_trim.is_empty() {
             issues.push(QaIssue {
                 entry_id: e.entry_id.clone(),
@@ -49,7 +43,6 @@ pub fn run(entries: &[CoreEntry]) -> Vec<QaIssue> {
             });
         }
 
-        // Inconsistências de status
         match e.status {
             EntryStatus::Translated | EntryStatus::Reviewed => {
                 if translation_trim.is_empty() {
@@ -70,14 +63,6 @@ pub fn run(entries: &[CoreEntry]) -> Vec<QaIssue> {
                 }
             }
             EntryStatus::Untranslated => {
-                // opcional: se quiser marcar "untranslated mas tem texto", útil para debugging
-                // if !translation_trim.is_empty() {
-                //     issues.push(QaIssue {
-                //         entry_id: e.entry_id.clone(),
-                //         code: "STATUS_UNTRANSLATED_BUT_HAS_TEXT".to_string(),
-                //         message: "Status UNTRANSLATED, mas há texto na tradução".to_string(),
-                //     });
-                // }
             }
         }
     }

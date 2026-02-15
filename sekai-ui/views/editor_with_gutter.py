@@ -20,7 +20,6 @@ class EditorWithGutter(QWidget):
         self.editor = editor_widget
         self.gutter = EditorGutter(self.editor, self)
 
-        # 🔑 GARANTE VISIBILIDADE REAL
         self.gutter.setVisible(True)
         self.gutter.setFixedWidth(120)
         self.gutter.setSizePolicy(
@@ -28,7 +27,6 @@ class EditorWithGutter(QWidget):
             QSizePolicy.Expanding,
         )
 
-        # Layout
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -37,11 +35,9 @@ class EditorWithGutter(QWidget):
         layout.addSpacing(self.GUTTER_SPACING)
         layout.addWidget(self.editor)
 
-        # Editor visual
         self.editor.setFrameStyle(QPlainTextEdit.NoFrame)
         self.editor.setViewportMargins(0, 0, 0, 0)
 
-        # SINCRONIZAÇÃO
         self.editor.blockCountChanged.connect(
             self.gutter.update_width
         )
@@ -54,7 +50,6 @@ class EditorWithGutter(QWidget):
             self.gutter.update_scroll
         )
 
-        # RENDER REAL
         self.gutter.update_width()
         self.gutter.update()
         self.update()

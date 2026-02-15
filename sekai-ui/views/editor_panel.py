@@ -47,7 +47,6 @@ class EditorPanel(QWidget):
         splitter = QSplitter(Qt.Vertical)
         splitter.setChildrenCollapsible(False)
 
-        # ================= ORIGINAL =================
         original_container = QWidget()
         original_layout = QVBoxLayout(original_container)
         original_layout.setContentsMargins(0, 0, 0, 0)
@@ -63,7 +62,6 @@ class EditorPanel(QWidget):
         original_layout.addWidget(original_label)
         original_layout.addWidget(self.original_with_gutter)
 
-        # ================= TRADUÇÃO =================
         translation_container = QWidget()
         translation_layout = QVBoxLayout(translation_container)
         translation_layout.setContentsMargins(0, 0, 0, 0)
@@ -85,12 +83,10 @@ class EditorPanel(QWidget):
 
         layout.addWidget(splitter)
 
-        # ================= INPUT SIGNALS =================
         self.translation_editor.commitRequested.connect(self._on_commit_requested)
         self.translation_editor.jumpNextRequested.connect(self._on_jump_next)
         self.translation_editor.jumpPrevRequested.connect(self._on_jump_prev)
 
-        # Undo/Redo delegados ao FileTab (se existirem esses signals no TranslationEditor)
         if hasattr(self.translation_editor, "undoRequested"):
             self.translation_editor.undoRequested.connect(self._on_undo_requested)
         if hasattr(self.translation_editor, "redoRequested"):
@@ -128,7 +124,6 @@ class EditorPanel(QWidget):
             te._loading_session = False
 
 
-        # força repaint total do gutter
         te.update()
         te.viewport().update()
 
@@ -143,45 +138,32 @@ class EditorPanel(QWidget):
         self.original_editor.setPlainText("")
         self.translation_editor.setPlainText("")
 
-    # =================================================
-    # Commit (Enter)
-    # =================================================
     def _on_commit_requested(self):
         if not self._session or not self._session.is_active():
             return
         if not self._file_tab:
             return
 
-        # Snapshot "antes" (somente do que está selecionado nesta sessão)
-        # O FileTab é quem sabe como snapshotar campos relevantes.
         session_rows = list(self._session.rows or [])
         before_all = self._file_tab.snapshot_rows(session_rows)
 
-        # mapeia row -> snapshot (para montar antes_snap exatamente na ordem de changed_rows)
         before_map: dict[int, dict] = {}
         for i, r in enumerate(session_rows):
             if i < len(before_all):
                 before_map[r] = before_all[i]
 
-        changed_rows = self._session.commit()  # retorna rows globais alteradas (list[int])
+        changed_rows = self._session.commit()
 
-        # Se nada mudou, ainda assim avança como no Sekai antigo
         if not changed_rows:
             self._file_tab.request_next_entry()
             return
 
-        # monta before_snap alinhado com changed_rows (contrato do FileTab.apply_commit_with_undo)
         before_snap = [before_map.get(r, {}) for r in changed_rows]
 
-        # registra undo + refresh de linhas (centralizado no FileTab)
         self._file_tab.apply_commit_with_undo(changed_rows, before_snap=before_snap)
 
-        # comportamento do Sekai antigo
         self._file_tab.request_next_entry()
 
-    # =================================================
-    # Navegação local (Shift+Enter, etc.)
-    # =================================================
     def _on_jump_next(self):
         self._jump(+1)
 
@@ -206,9 +188,6 @@ class EditorPanel(QWidget):
         new_cursor.setPosition(target.position() + pos)
         self.translation_editor.setTextCursor(new_cursor)
 
-    # =================================================
-    # Undo/Redo (delegado)
-    # =================================================
     def _on_undo_requested(self):
         if self._file_tab:
             self._file_tab.undo()

@@ -76,7 +76,7 @@ class GitHubReleaseUpdater:
 
         installer = ""
         sha = ""
-        # Prefer assets that contain 'setup' and match .exe/.sha256
+        
         for a in assets:
             name = (a.get("name") or "").lower()
             url = (a.get("browser_download_url") or "").strip()
@@ -113,7 +113,7 @@ class GitHubReleaseUpdater:
         if not expected or got != expected:
             raise RuntimeError("Falha na verificação SHA256 do instalador.")
 
-        # Inno Setup silent install (upgrade in-place se AppId for fixo)
+        
         subprocess.Popen(
             [installer_path, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
             close_fds=True,

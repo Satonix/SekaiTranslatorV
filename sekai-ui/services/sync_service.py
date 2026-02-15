@@ -80,7 +80,7 @@ def export_sync_snapshot(project: dict) -> dict:
             entries = st.get("entries") if isinstance(st.get("entries"), list) else []
             rel_path = _safe_relpath(root, file_path) if file_path else _safe_relpath(state_root, abs_state)
 
-            # fingerprint based on current state file content (not original game file)
+            
             try:
                 raw = json.dumps(entries, ensure_ascii=False, sort_keys=True).encode("utf-8", errors="ignore")
                 fp = hashlib.sha256(raw).hexdigest()
@@ -149,7 +149,7 @@ def import_sync_snapshot(project: dict, payload: dict, *, prefer_incoming_on_con
     local_pid = compute_project_id(project)
     base_mismatch = 0
     if incoming_pid and incoming_pid != local_pid:
-        # allow import but count mismatch (professional: warn)
+        
         base_mismatch = 1
 
     root = (project.get("root_path") or "").strip()
@@ -162,8 +162,8 @@ def import_sync_snapshot(project: dict, payload: dict, *, prefer_incoming_on_con
     if not isinstance(files, list):
         raise ValueError("Arquivo de sincronização inválido (files).")
 
-    # Build a mapping from rel_path -> absolute file_path if we have it via existing states
-    # We'll merge into the persisted state files by loading them from project_state_store.
+    
+    
     for f_rec in files:
         if not isinstance(f_rec, dict):
             continue
@@ -175,7 +175,7 @@ def import_sync_snapshot(project: dict, payload: dict, *, prefer_incoming_on_con
 
         st = project_state_store.load_file_state(project, abs_file)
         if not st:
-            # If no local state exists yet, create minimal from incoming
+            
             local_entries: List[dict] = []
         else:
             local_entries = st.entries
@@ -205,7 +205,7 @@ def import_sync_snapshot(project: dict, payload: dict, *, prefer_incoming_on_con
 
             le = by_id.get(eid)
             if le is None:
-                # create a new entry shell only if it has something meaningful
+                
                 le = {"entry_id": eid, "translation": "", "status": "untranslated"}
                 local_entries.append(le)
                 by_id[eid] = le
@@ -216,14 +216,14 @@ def import_sync_snapshot(project: dict, payload: dict, *, prefer_incoming_on_con
             loc_at = le.get("_updated_at") or ""
             loc_by = le.get("_updated_by") or ""
 
-            # decide if incoming is newer
+            
             newer = False
             if inc_rev > loc_rev:
                 newer = True
             elif inc_rev < loc_rev:
                 newer = False
             else:
-                # same rev -> use updated_at to decide, but conflicts if both differ and both non-empty
+                
                 if (loc_tr and inc_tr and loc_tr != inc_tr):
                     conflicts.append(Conflict(
                         rel_path=rel_path,
@@ -245,7 +245,7 @@ def import_sync_snapshot(project: dict, payload: dict, *, prefer_incoming_on_con
                 skipped_older += 1
                 continue
 
-            # apply incoming
+            
             if inc_tr != "":
                 le["translation"] = inc_tr
             le["status"] = inc_st
@@ -254,7 +254,7 @@ def import_sync_snapshot(project: dict, payload: dict, *, prefer_incoming_on_con
             le["_updated_by"] = inc_by or "import"
             applied += 1
 
-        # persist merged state
+        
         project_state_store.save_file_state(project, abs_file, local_entries)
 
     return ImportReport(applied=applied, skipped_older=skipped_older, conflicts=conflicts, base_mismatch=base_mismatch)

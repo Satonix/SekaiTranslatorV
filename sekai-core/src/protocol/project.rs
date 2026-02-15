@@ -50,7 +50,6 @@ pub fn handle(cmd: &str, payload: &Value) -> Option<Value> {
             }
         }
 
-        // NOVO: project.save
         "project.save" => {
             let project_val = payload.get("project").cloned().unwrap_or(Value::Null);
             if project_val.is_null() {

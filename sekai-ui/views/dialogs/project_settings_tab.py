@@ -1,4 +1,3 @@
-# views/dialogs/project_settings_tab.py
 
 from __future__ import annotations
 
@@ -19,7 +18,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-# Lista pequena e prática (você pode expandir depois)
 ENCODINGS = [
     "utf-8",
     "utf-8-sig",
@@ -62,9 +60,6 @@ class ProjectSettingsTab(QWidget):
         outer.setContentsMargins(12, 12, 12, 12)
         outer.setSpacing(10)
 
-        # ----------------------------
-        # Info / Paths
-        # ----------------------------
         box_info = QGroupBox("Projeto")
         form = QFormLayout(box_info)
         form.setLabelAlignment(Qt.AlignLeft)
@@ -72,18 +67,15 @@ class ProjectSettingsTab(QWidget):
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(8)
 
-        # project_path (read-only)
         self.lbl_project_path = QLabel("—")
         self.lbl_project_path.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.lbl_project_path.setStyleSheet("color: #AAA;")
         form.addRow("Caminho do projeto:", self.lbl_project_path)
 
-        # name
         self.ed_name = QLineEdit()
         self.ed_name.setPlaceholderText("Nome do projeto (exibição)")
         form.addRow("Nome:", self.ed_name)
 
-        # root_path + browse
         root_row = QWidget()
         root_layout = QHBoxLayout(root_row)
         root_layout.setContentsMargins(0, 0, 0, 0)
@@ -100,7 +92,6 @@ class ProjectSettingsTab(QWidget):
 
         form.addRow("Root do jogo:", root_row)
 
-        # encoding
         self.cmb_encoding = QComboBox()
         for enc in ENCODINGS:
             self.cmb_encoding.addItem(enc, enc)
@@ -108,9 +99,7 @@ class ProjectSettingsTab(QWidget):
         self.cmb_encoding.setInsertPolicy(QComboBox.NoInsert)
         form.addRow("Encoding:", self.cmb_encoding)
 
-        # engine
         self.cmb_engine = QComboBox()
-        # valores exemplos; ajuste para sua lista real (o core aceita string)
         engines = [
             ("", "—"),
             ("kirikiri", "KiriKiri / KAG"),
@@ -120,15 +109,12 @@ class ProjectSettingsTab(QWidget):
         ]
         for key, label in engines:
             self.cmb_engine.addItem(label, key)
-        self.cmb_engine.setEditable(True)  # permite digitar engine id manual
+        self.cmb_engine.setEditable(True)
         self.cmb_engine.setInsertPolicy(QComboBox.NoInsert)
         form.addRow("Engine:", self.cmb_engine)
 
         outer.addWidget(box_info)
 
-        # ----------------------------
-        # Languages
-        # ----------------------------
         box_lang = QGroupBox("Idiomas")
         form2 = QFormLayout(box_lang)
         form2.setLabelAlignment(Qt.AlignLeft)
@@ -139,7 +125,6 @@ class ProjectSettingsTab(QWidget):
         self.cmb_source_lang = QComboBox()
         self.cmb_target_lang = QComboBox()
 
-        # lista básica (BCP-47 simplificado)
         langs = [
             ("", "—"),
             ("ja", "Japanese (ja)"),
@@ -168,9 +153,6 @@ class ProjectSettingsTab(QWidget):
         outer.addWidget(box_lang)
         outer.addStretch()
 
-    # ----------------------------
-    # UI actions
-    # ----------------------------
     def _browse_root(self):
         start = self.ed_root_path.text().strip()
         if not start or not os.path.isdir(start):
@@ -180,9 +162,6 @@ class ProjectSettingsTab(QWidget):
         if path:
             self.ed_root_path.setText(path)
 
-    # ----------------------------
-    # Public API
-    # ----------------------------
     def load_project(self, project: dict) -> None:
         project = project or {}
 
@@ -193,7 +172,6 @@ class ProjectSettingsTab(QWidget):
         enc = (project.get("encoding") or "utf-8").strip() or "utf-8"
         idx = self.cmb_encoding.findData(enc)
         if idx < 0:
-            # se não estiver na lista, joga no texto editável
             self.cmb_encoding.setCurrentText(enc)
         else:
             self.cmb_encoding.setCurrentIndex(idx)
@@ -244,7 +222,6 @@ class ProjectSettingsTab(QWidget):
         if not encoding:
             raise ValueError("Encoding não pode ficar vazio.")
 
-        # grava no dict
         project["name"] = name
         project["root_path"] = root_path
         project["encoding"] = encoding

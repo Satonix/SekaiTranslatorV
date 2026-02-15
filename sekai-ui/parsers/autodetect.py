@@ -1,4 +1,3 @@
-# parsers/autodetect.py
 from __future__ import annotations
 
 import os
@@ -44,7 +43,6 @@ def select_parser(project: dict, file_path: str, text: str):
                 best_score = score
                 best = p
         except Exception:
-            # plugin quebrado não derruba o app
             continue
 
     if best is not None and best_score > 0.0:

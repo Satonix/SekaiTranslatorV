@@ -1,4 +1,3 @@
-# parsers/__init__.py
 from .api import list_parsers, update_repo_from_github
 from .autodetect import select_parser
 from .base import ParseContext, ParserError

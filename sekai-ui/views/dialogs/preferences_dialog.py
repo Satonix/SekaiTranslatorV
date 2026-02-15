@@ -38,9 +38,6 @@ class PreferencesDialog(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(12)
 
-        # =========================
-        # Aparência
-        # =========================
         appearance_box = QGroupBox("Aparência")
         appearance_layout = QVBoxLayout(appearance_box)
         appearance_layout.setSpacing(8)
@@ -56,9 +53,6 @@ class PreferencesDialog(QDialog):
 
         layout.addWidget(appearance_box)
 
-        # =========================
-        # Comportamento
-        # =========================
         behavior_box = QGroupBox("Comportamento")
         behavior_layout = QVBoxLayout(behavior_box)
         behavior_layout.setSpacing(6)
@@ -71,9 +65,6 @@ class PreferencesDialog(QDialog):
 
         layout.addWidget(behavior_box)
 
-        # =========================
-        # Servidor (Login / IA)
-        # =========================
         server_box = QGroupBox("Servidor (Conta / IA)")
         server_layout = QVBoxLayout(server_box)
         server_layout.setSpacing(8)
@@ -112,9 +103,6 @@ class PreferencesDialog(QDialog):
 
         layout.addStretch()
 
-        # =========================
-        # Botões
-        # =========================
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -128,17 +116,12 @@ class PreferencesDialog(QDialog):
 
         layout.addLayout(btn_layout)
 
-        # Conexões
         self.btn_cancel.clicked.connect(self.reject)
         self.btn_ok.clicked.connect(self._ok)
         self.btn_apply.clicked.connect(self._apply)
 
-        # Carrega settings atuais
         self._load()
 
-    # --------------------------
-    # Settings
-    # --------------------------
     def _settings(self) -> QSettings:
         return QSettings("SekaiTranslator", "SekaiTranslator")
 
@@ -184,9 +167,6 @@ class PreferencesDialog(QDialog):
         s.setValue("auth/auth_url", self.auth_url_edit.text().strip())
         s.setValue("auth/proxy_url", self.proxy_url_edit.text().strip())
 
-    # --------------------------
-    # Actions
-    # --------------------------
     def _clear_token(self) -> None:
         s = self._settings()
         s.remove("auth/api_token")

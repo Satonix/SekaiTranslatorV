@@ -2,12 +2,15 @@ import sys
 import os
 import traceback
 
-# garante que imports como `views.*` funcionem em builds empacotados
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-APP_VERSION = "0.1.0"
+try:
+    from version import APP_NAME, APP_VERSION
+except Exception:
+    APP_NAME = "SekaiTranslatorV"
+    APP_VERSION = "0.0.0"
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtGui import QPalette, QColor
@@ -44,7 +47,6 @@ def apply_dark_theme(app: QApplication):
 
 
 def _show_fatal(title: str, message: str):
-    # QMessageBox precisa de QApplication já criado
     QMessageBox.critical(None, title, message)
 
 
@@ -71,7 +73,6 @@ def main():
     try:
         core.start()
 
-        # sanity check: ping (detecta core que abriu e morreu na hora)
         try:
             resp = core.send("ping", {}, timeout=5)
             if resp.get("status") != "ok":
@@ -85,14 +86,13 @@ def main():
             )
             return 1
 
-        window = MainWindow(core)
+        window = MainWindow(core, app_version=APP_VERSION, app_name=APP_NAME)
         window.show()
 
         exit_code = app.exec()
         return int(exit_code)
 
     except Exception:
-        # Erro inesperado: mostra e garante stop do core
         err_text = traceback.format_exc()
         _show_fatal("Erro fatal", err_text)
         return 1
@@ -101,7 +101,6 @@ def main():
         try:
             core.stop()
         except Exception:
-            # não deixe erro no stop mascarar a saída do app
             pass
 
 

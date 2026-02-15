@@ -26,11 +26,11 @@ from PySide6.QtWidgets import (
 
 @dataclass(frozen=True)
 class SearchResult:
-    scope: str  # 'file' or 'project'
+    scope: str
     file_path: str
     source_row: int
     entry_id: str
-    field: str  # 'original' or 'translation'
+    field: str
     snippet: str
 
 
@@ -71,7 +71,6 @@ class SearchDialog(QDialog):
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(8)
 
-        # Query row (Localizar)
         row_q = QHBoxLayout()
         row_q.addWidget(QLabel("Texto:"))
         self.query = QLineEdit()
@@ -84,7 +83,6 @@ class SearchDialog(QDialog):
 
         root.addLayout(row_q)
 
-        # Replace row (Substituir)
         row_r = QHBoxLayout()
         row_r.addWidget(QLabel("Substituir por:"))
         self.replace = QLineEdit()
@@ -101,7 +99,6 @@ class SearchDialog(QDialog):
 
         root.addLayout(row_r)
 
-        # Scope
         row_scope = QHBoxLayout()
         row_scope.addWidget(QLabel("Escopo:"))
 
@@ -121,10 +118,8 @@ class SearchDialog(QDialog):
 
         root.addLayout(row_scope)
 
-        # Options
         row_opts = QHBoxLayout()
         self.ck_original = QCheckBox("Original")
-        # Por padrão, Ctrl+F deve buscar em Tradução (Original marcado manualmente)
         self.ck_original.setChecked(False)
         self.ck_translation = QCheckBox("Tradução")
         self.ck_translation.setChecked(True)
@@ -139,7 +134,6 @@ class SearchDialog(QDialog):
         row_opts.addStretch(1)
         root.addLayout(row_opts)
 
-        # Results
         self.results = QListWidget()
         self.results.itemDoubleClicked.connect(self._open_selected)
         root.addWidget(self.results, 1)
@@ -148,7 +142,6 @@ class SearchDialog(QDialog):
         hint.setStyleSheet("color: #999;")
         root.addWidget(hint)
 
-        # Bottom buttons
         bottom = QHBoxLayout()
         bottom.addStretch(1)
         self.btn_close = QPushButton("Fechar")
@@ -179,7 +172,6 @@ class SearchDialog(QDialog):
             QMessageBox.information(self, "Buscar", "Marque pelo menos 'Original' ou 'Tradução'.")
             return
 
-        # UX: show a simple progress dialog for project scans (which can take time)
         pd: Optional[QProgressDialog] = None
         if params.get("scope") == "project":
             pd = QProgressDialog("Buscando no projeto…", "Cancelar", 0, 0, self)
@@ -280,7 +272,6 @@ class SearchDialog(QDialog):
             QMessageBox.information(self, "Substituir", "Nada para substituir neste resultado.")
             return
 
-        # refresh list and keep selection as close as possible
         cur_row = max(self.results.currentRow(), 0)
         self._on_search_clicked()
         if self.results.count() > 0:

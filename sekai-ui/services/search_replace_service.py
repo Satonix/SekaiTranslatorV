@@ -46,7 +46,6 @@ class SearchReplaceService:
             return None, None
         want = self._norm_path(path)
         try:
-            # fast path: exact keys
             if path in (self._open_files or {}):
                 return path, self._open_files.get(path)
             ap = os.path.abspath(path)
@@ -85,7 +84,6 @@ class SearchReplaceService:
 
         target_path = os.path.abspath(str(res.file_path))
 
-        # Ensure tab is open (by file system index).
         _, tab = self._get_open_tab_for_path(target_path)
         if tab is None:
             try:
@@ -101,10 +99,6 @@ class SearchReplaceService:
 
         self.tabs.setCurrentWidget(tab)
 
-        # Navigation order:
-        # 1) entry_id (stable)
-        # 2) snippet match in requested field (best-effort)
-        # 3) fallback to source_row (clamped)
         entry_id = str(getattr(res, "entry_id", "") or "").strip()
         try:
             fallback_row = int(res.source_row) if res.source_row is not None else None
@@ -120,7 +114,6 @@ class SearchReplaceService:
 
         entries = getattr(tab, "_entries", []) or []
 
-        # 2) snippet match
         try:
             field = str(getattr(res, "field", "") or "").strip().lower()
             snippet = str(getattr(res, "snippet", "") or "").strip()
@@ -148,7 +141,6 @@ class SearchReplaceService:
         except Exception:
             pass
 
-        # 3) fallback row
         if isinstance(fallback_row, int) and entries:
             try:
                 sr = max(0, min(fallback_row, len(entries) - 1))
@@ -162,18 +154,15 @@ class SearchReplaceService:
         if isinstance(v, str):
             return v
         if isinstance(v, (list, tuple)):
-            # caso o editor guarde linhas
             return "\n".join(str(x) for x in v if x is not None)
         return ""
 
     def _get_translation_text(self, entry: dict) -> str:
-        # 1) tradução atual (em edição)
         tr = entry.get("translation")
         tr_txt = self._as_text(tr).strip()
         if tr_txt:
             return tr_txt
 
-        # 2) fallback: última tradução confirmada
         tr2 = entry.get("_last_committed_translation")
         return self._as_text(tr2).strip()
 
@@ -280,7 +269,6 @@ class SearchReplaceService:
 
         results: list[SearchResult] = []
 
-        # Se o arquivo já está aberto, use as entries em memória (inclui traduções não salvas).
         open_entries_by_path: dict[str, list[dict]] = {}
         try:
             for p, tab in (self._open_files or {}).items():
@@ -306,7 +294,6 @@ class SearchReplaceService:
                     if not self._is_openable_candidate(path):
                         continue
 
-                    # Fast-path: arquivo aberto -> entries em memória
                     if abs_path in open_entries_by_path:
                         try:
                             entries = open_entries_by_path[abs_path] or []
@@ -354,11 +341,6 @@ class SearchReplaceService:
                     except Exception:
                         continue
 
-                    # Aplica state salvo (se existir) para permitir busca no campo de tradução.
-                    # Além do match por entry_id, tenta fallback por texto original quando:
-                    # - o parser mudou a ordem
-                    # - entries salvas incluem não-traduzíveis
-                    # - algum parser não gera entry_id estável
                     try:
                         st = project_state_store.load_file_state(self.current_project, path)
                         saved = getattr(st, "entries", None) if st else None
@@ -376,7 +358,6 @@ class SearchReplaceService:
                                 if isinstance(o, str) and o:
                                     by_original.setdefault(o, []).append(se)
 
-                            # 1) por entry_id
                             if by_id:
                                 for ce in entries or []:
                                     if not isinstance(ce, dict):
@@ -390,11 +371,9 @@ class SearchReplaceService:
                                         if "status" in se:
                                             ce["status"] = se.get("status") or "untranslated"
 
-                            # 2) fallback por original (somente quando houver 1 match)
                             for ce in entries or []:
                                 if not isinstance(ce, dict):
                                     continue
-                                # se já tem tradução aplicada, não mexe
                                 if isinstance(ce.get("translation"), str) and (ce.get("translation") or "").strip():
                                     continue
                                 o = ce.get("original")
@@ -409,7 +388,6 @@ class SearchReplaceService:
                                 if "status" in se:
                                     ce["status"] = se.get("status") or "untranslated"
 
-                            # 3) fallback final por índice quando tamanho bate
                             if isinstance(entries, list) and len(saved) == len(entries):
                                 for ce, se in zip(entries, saved):
                                     if not (isinstance(ce, dict) and isinstance(se, dict)):
@@ -473,9 +451,6 @@ class SearchReplaceService:
         return ""
 
 
-    # ============================================================
-    # Replace (used by SearchDialog)
-    # ============================================================
     def _search_replace_one(self, res: SearchResult, query: str, replace_text: str, params: dict) -> bool:
         """Replace only the selected match.
 
@@ -486,7 +461,6 @@ class SearchReplaceService:
             return False
 
         if (res.field or "") != "translation":
-            # Avoid editing originals by default.
             return False
 
         rx = self._search_compile({**(params or {}), "query": query})
@@ -495,7 +469,6 @@ class SearchReplaceService:
 
         path = os.path.abspath(res.file_path)
 
-        # If open, edit in-memory tab (with undo).
         _, tab = self._get_open_tab_for_path(path)
         if tab is not None:
             entries = getattr(tab, "_entries", []) or []
@@ -526,11 +499,9 @@ class SearchReplaceService:
             self._update_tab_title(tab)
             return True
 
-        # Not open: apply to saved state (project scope only).
         if not self.current_project:
             return False
 
-        # Load parse entries + saved state, apply replacement, save back.
         try:
             root = (self.current_project.get("root_path") or "").strip()
             encoding = (self.current_project.get("encoding") or "utf-8").strip() or "utf-8"
@@ -639,7 +610,6 @@ class SearchReplaceService:
             e["translation"] = new_v
             after.append({"translation": new_v, "status": e.get("status") or "untranslated"})
 
-            # refresh visible row if present
             try:
                 vr = tab._visible_row_from_source_row(i)
                 if vr is not None:
@@ -699,7 +669,6 @@ class SearchReplaceService:
             if isinstance(o, str) and o:
                 by_original.setdefault(o, []).append(se)
 
-        # 1) entry_id
         if by_id:
             for ce in entries:
                 if not isinstance(ce, dict):
@@ -713,7 +682,6 @@ class SearchReplaceService:
                     if "status" in se:
                         ce["status"] = se.get("status") or "untranslated"
 
-        # 2) fallback by original (only unique matches)
         for ce in entries:
             if not isinstance(ce, dict):
                 continue
@@ -731,7 +699,6 @@ class SearchReplaceService:
             if "status" in se:
                 ce["status"] = se.get("status") or "untranslated"
 
-        # 3) fallback by index when lengths match
         if len(saved) == len(entries):
             for ce, se in zip(entries, saved):
                 if not (isinstance(ce, dict) and isinstance(se, dict)):
@@ -771,13 +738,11 @@ class SearchReplaceService:
 
                     abs_path = os.path.abspath(path)
 
-                    # open tab? -> in-memory
                     _, tab = self._get_open_tab_for_path(abs_path)
                     if tab is not None:
                         total_occ += int(self._replace_all_in_open_tab(tab, rx, replace_text) or 0)
                         continue
 
-                    # closed file -> parse + apply state + replace + save state
                     try:
                         with open(abs_path, "r", encoding=encoding, errors="replace") as f:
                             text = f.read()
@@ -793,7 +758,6 @@ class SearchReplaceService:
                     except Exception:
                         continue
 
-                    # apply saved state so we replace what user sees as translation
                     self._apply_saved_state_to_entries(abs_path, entries)
 
                     changed = False

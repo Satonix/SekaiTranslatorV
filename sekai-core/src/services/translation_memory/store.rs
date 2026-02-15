@@ -29,7 +29,6 @@ pub fn load() -> Vec<TMEntry> {
         }
     };
 
-    // 1) Migração leve + 2) dedup + 3) sort (determinístico)
     let mut migrated = false;
 
     for e in entries.iter_mut() {
@@ -44,7 +43,6 @@ pub fn load() -> Vec<TMEntry> {
     let mut final_entries = deduped;
     sort_entries(&mut final_entries);
 
-    // Persistir migrações/normalizações/dedup
     if migrated {
         if let Err(e) = save(&final_entries) {
             eprintln!("[TM] failed to persist migration: {e}");
@@ -55,15 +53,12 @@ pub fn load() -> Vec<TMEntry> {
 }
 
 pub fn save(entries: &[TMEntry]) -> Result<(), String> {
-    // Copia para poder garantir invariantes sem mutar chamador
     let mut v: Vec<TMEntry> = entries.to_vec();
 
-    // Garantir invariantes (normalized/hash) antes de persistir
     for e in v.iter_mut() {
         ensure_norm_hash(e);
     }
 
-    // Dedup + sort antes de salvar (arquivo estável)
     let (mut v, _removed) = dedup(v);
     sort_entries(&mut v);
 
@@ -74,10 +69,8 @@ pub fn save(entries: &[TMEntry]) -> Result<(), String> {
     Ok(())
 }
 
-// Internals
 
 fn ensure_norm_hash(e: &mut TMEntry) -> bool {
-    // Retorna true se alterou (migração)
     let mut changed = false;
 
     if e.normalized.is_empty() {
@@ -94,17 +87,10 @@ fn ensure_norm_hash(e: &mut TMEntry) -> bool {
 }
 
 fn dedup(entries: Vec<TMEntry>) -> (Vec<TMEntry>, usize) {
-    // Regra: chave determinística por língua + hash.
-    // Preferência: manter a "melhor" entry caso haja colisão.
-    // Critério simples (determinístico):
-    // - preferir tradução não vazia
-    // - se ambas não vazias, preferir a mais longa (tende a ser mais completa)
-    // - fallback: manter a primeira após sort (mas aqui ainda não sortamos; então aplicamos regra local)
     let mut map: HashMap<(String, String, String), TMEntry> = HashMap::new();
     let mut removed = 0usize;
 
     for mut e in entries {
-        // Garantir invariantes para chave correta
         ensure_norm_hash(&mut e);
 
         let key = (e.source_lang.clone(), e.target_lang.clone(), e.hash.clone());
@@ -114,7 +100,6 @@ fn dedup(entries: Vec<TMEntry>) -> (Vec<TMEntry>, usize) {
                 map.insert(key, e);
             }
             Some(existing) => {
-                // Decide qual manter
                 let keep_new = pick_better(existing, &e);
                 if keep_new {
                     *existing = e;
@@ -125,7 +110,6 @@ fn dedup(entries: Vec<TMEntry>) -> (Vec<TMEntry>, usize) {
     }
 
     let out: Vec<TMEntry> = map.into_values().collect();
-    // Não esquecer: ordenação é feita fora (load/save)
     (out, removed)
 }
 
@@ -140,7 +124,6 @@ fn pick_better(current: &TMEntry, candidate: &TMEntry) -> bool {
         return false;
     }
 
-    // ambos vazios ou ambos não vazios -> preferir a mais longa
     candidate.translation.len() > current.translation.len()
 }
 
@@ -166,8 +149,6 @@ fn sort_entries(entries: &mut Vec<TMEntry>) {
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    // Estratégia: escrever em arquivo temporário no mesmo diretório e renomear.
-    // Em Windows, rename sobre existente pode falhar; então removemos antes.
     let tmp = tmp_path(path);
 
     if let Some(parent) = tmp.parent() {
@@ -176,7 +157,6 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
     fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
 
-    // Remover destino antes (melhor compatibilidade no Windows)
     if path.exists() {
         fs::remove_file(path).map_err(|e| e.to_string())?;
     }
@@ -187,7 +167,6 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
 }
 
 fn tmp_path(path: &Path) -> PathBuf {
-    // translation_memory.json.tmp
     let mut p = path.to_path_buf();
     let file_name = match path.file_name().and_then(|s| s.to_str()) {
         Some(n) => n.to_string(),
