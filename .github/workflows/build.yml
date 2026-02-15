@@ -24,7 +24,7 @@ jobs:
         run: |
           $v = "${{ github.ref_name }}"
           $v = $v.TrimStart("v")
-          "APP_VER=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "APP_VER=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "APP_VER=$v"
 
       # -------------------------
@@ -34,15 +34,16 @@ jobs:
         shell: pwsh
         run: |
           $p = "sekai-ui/version.py"
-          $content = @"
-APP_NAME = "SekaiTranslatorV"
-APP_VERSION = "${{ env.APP_VER }}"
-"@
-          Set-Content -Path $p -Value $content -Encoding UTF8
+          New-Item -ItemType Directory -Force (Split-Path $p) | Out-Null
+          $lines = @(
+            "APP_NAME = 'SekaiTranslatorV'"
+            "APP_VERSION = '$env:APP_VER'"
+          )
+          Set-Content -Path $p -Value $lines -Encoding UTF8
           Write-Host "Wrote $p"
 
       # -------------------------
-      # Setup Rust (stable + reliable)
+      # Setup Rust
       # -------------------------
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -50,8 +51,9 @@ APP_VERSION = "${{ env.APP_VER }}"
       - name: Build sekai-core
         shell: pwsh
         run: |
-          cd sekai-core
+          Push-Location sekai-core
           cargo build --release
+          Pop-Location
 
       # -------------------------
       # Setup Python
@@ -64,8 +66,8 @@ APP_VERSION = "${{ env.APP_VER }}"
       - name: Install Python deps
         shell: pwsh
         run: |
-          pip install --upgrade pip
-          pip install pyinstaller PySide6
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller PySide6
 
       # -------------------------
       # Build sekai-ui
@@ -99,12 +101,13 @@ APP_VERSION = "${{ env.APP_VER }}"
       # -------------------------
       - name: Install Inno Setup
         shell: pwsh
-        run: choco install innosetup -y
+        run: |
+          choco install innosetup -y
 
       - name: Build installer
         shell: pwsh
         run: |
-          iscc /DAPP_VER=${{ env.APP_VER }} installer.iss
+          iscc /DAPP_VER=$env:APP_VER installer.iss
 
       # -------------------------
       # Generate SHA256
@@ -128,6 +131,8 @@ APP_VERSION = "${{ env.APP_VER }}"
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fail_on_unmatched_files: true
           files: |
             installer_output/*.exe
             installer_output/*.sha256
