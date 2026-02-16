@@ -2,10 +2,12 @@ import sys
 import os
 import traceback
 
+# garante que imports como `views.*` funcionem em builds empacotados
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+# Fonte única de verdade (CI escreve version.py a partir da tag)
 try:
     from version import APP_NAME, APP_VERSION
 except Exception:
@@ -47,24 +49,71 @@ def apply_dark_theme(app: QApplication):
 
 
 def _show_fatal(title: str, message: str):
+    # QMessageBox precisa de QApplication já criado
     QMessageBox.critical(None, title, message)
+
+
+def _app_dir() -> str:
+    """
+    Retorna a pasta base do app.
+    - PyInstaller: pasta do executável
+    - Dev: pasta deste arquivo (main.py)
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def find_core_exe() -> str:
+    """
+    Resolve o caminho do sekai-core.exe de forma portátil.
+
+    Ordem:
+    1) env SEKAI_CORE_PATH (override)
+    2) ao lado do exe (produção)
+    3) fallback dev (repo)
+    """
+    # 1) Override por env (dev / power users)
+    envp = (os.environ.get("SEKAI_CORE_PATH") or "").strip()
+    if envp and os.path.exists(envp):
+        return envp
+
+    base = _app_dir()
+
+    # 2) Produção: core ao lado do exe (Inno Setup instala assim)
+    candidates = [
+        os.path.join(base, "sekai-core.exe"),
+        os.path.join(base, "core", "sekai-core.exe"),  # opcional (se você preferir subpasta)
+    ]
+
+    # 3) Dev fallback (repo)
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    candidates += [
+        os.path.join(repo_root, "sekai-core", "target", "release", "sekai-core.exe"),
+        os.path.join(repo_root, "sekai-core", "target", "debug", "sekai-core.exe"),
+    ]
+
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+
+    # Retorna o caminho "esperado" (para aparecer na mensagem de erro)
+    return os.path.join(base, "sekai-core.exe")
 
 
 def main():
     app = QApplication(sys.argv)
     apply_dark_theme(app)
 
-    core_path = (
-        r"C:\Users\lucas\Documents\Sekai Visual Novel\Ferramentas\SekaiTranslatorV"
-        r"\sekai-core\target\debug\sekai-core.exe"
-    )
+    core_path = find_core_exe()
 
     if not os.path.exists(core_path):
         _show_fatal(
             "Core não encontrado",
             "Não foi possível localizar o executável do sekai-core.\n\n"
-            f"Caminho:\n{core_path}\n\n"
-            "Compile o core (cargo build) ou ajuste o core_path.",
+            f"Caminho esperado:\n{core_path}\n\n"
+            "Verifique se o arquivo 'sekai-core.exe' está na mesma pasta do SekaiTranslatorV "
+            "(ou reinstale).",
         )
         return 1
 
@@ -73,6 +122,7 @@ def main():
     try:
         core.start()
 
+        # sanity check: ping (detecta core que abriu e morreu na hora)
         try:
             resp = core.send("ping", {}, timeout=5)
             if resp.get("status") != "ok":
@@ -93,6 +143,7 @@ def main():
         return int(exit_code)
 
     except Exception:
+        # Erro inesperado: mostra e garante stop do core
         err_text = traceback.format_exc()
         _show_fatal("Erro fatal", err_text)
         return 1
@@ -101,8 +152,10 @@ def main():
         try:
             core.stop()
         except Exception:
+            # não deixe erro no stop mascarar a saída do app
             pass
 
 
 if __name__ == "__main__":
     sys.exit(main())
+```0
