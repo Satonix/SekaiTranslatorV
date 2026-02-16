@@ -36,7 +36,22 @@ class ParserManager:
         return rp.plugin if rp else None
 
     def all_plugins(self) -> List[Any]:
-        return [rp.plugin for rp in self.registry.all()]
+        # Hot path (auto-detect): evita re-alocar lista quando o registro não mudou.
+        cached = getattr(self, "_plugins_cache", None)
+        cached_n = getattr(self, "_plugins_cache_n", None)
+
+        try:
+            n = len(self.registry.ids())
+        except Exception:
+            n = None
+
+        if isinstance(cached, list) and cached_n == n:
+            return cached
+
+        plugins = [rp.plugin for rp in self.registry.all()]
+        self._plugins_cache = plugins
+        self._plugins_cache_n = n
+        return plugins
 
 
 _MANAGER: ParserManager | None = None

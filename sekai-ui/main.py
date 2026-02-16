@@ -50,21 +50,63 @@ def _show_fatal(title: str, message: str):
     QMessageBox.critical(None, title, message)
 
 
+def _app_dir() -> str:
+    """
+    Retorna a pasta base do app.
+    - PyInstaller: pasta do executável
+    - Dev: pasta deste arquivo (main.py)
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def find_core_exe() -> str:
+    """
+    Resolve o caminho do sekai-core.exe de forma portátil.
+
+    Ordem:
+    1) env SEKAI_CORE_PATH (override)
+    2) ao lado do exe (produção)
+    3) fallback dev (repo)
+    """
+    envp = (os.environ.get("SEKAI_CORE_PATH") or "").strip()
+    if envp and os.path.exists(envp):
+        return envp
+
+    base = _app_dir()
+
+    candidates = [
+        os.path.join(base, "sekai-core.exe"),
+        os.path.join(base, "core", "sekai-core.exe"),  # opcional (se você preferir subpasta)
+    ]
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    candidates += [
+        os.path.join(repo_root, "sekai-core", "target", "release", "sekai-core.exe"),
+        os.path.join(repo_root, "sekai-core", "target", "debug", "sekai-core.exe"),
+    ]
+
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+
+    return os.path.join(base, "sekai-core.exe")
+
+
 def main():
     app = QApplication(sys.argv)
     apply_dark_theme(app)
 
-    core_path = (
-        r"C:\Users\lucas\Documents\Sekai Visual Novel\Ferramentas\SekaiTranslatorV"
-        r"\sekai-core\target\debug\sekai-core.exe"
-    )
+    core_path = find_core_exe()
 
     if not os.path.exists(core_path):
         _show_fatal(
             "Core não encontrado",
             "Não foi possível localizar o executável do sekai-core.\n\n"
-            f"Caminho:\n{core_path}\n\n"
-            "Compile o core (cargo build) ou ajuste o core_path.",
+            f"Caminho esperado:\n{core_path}\n\n"
+            "Verifique se o arquivo 'sekai-core.exe' está na mesma pasta do SekaiTranslatorV "
+            "(ou reinstale).",
         )
         return 1
 

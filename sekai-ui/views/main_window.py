@@ -5,6 +5,7 @@ import json
 import copy
 import re
 import time
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import Qt, QSettings, QThread, QTimer
 from PySide6.QtGui import QKeySequence
@@ -24,25 +25,16 @@ from PySide6.QtWidgets import (
 
 from views.file_tab import FileTab
 
-from views.dialogs.login_dialog import LoginDialog
-from views.dialogs.plugin_manager_dialog import PluginManagerDialog
-from views.dialogs.open_project_dialog import OpenProjectDialog
-from views.dialogs.create_project_dialog import CreateProjectDialog
-from views.dialogs.project_settings_dialog import ProjectSettingsDialog
-from views.dialogs.qa_dialog import QADialog
-from views.dialogs.glossary_dialog import GlossaryDialog
-from views.dialogs.translation_memory_dialog import TranslationMemoryDialog
-from views.dialogs.about_dialog import AboutDialog
-from views.dialogs.preferences_dialog import PreferencesDialog
-from views.dialogs.search_dialog import SearchDialog, SearchResult
+if TYPE_CHECKING:
+    from views.dialogs.search_dialog import SearchResult
+else:
+    SearchResult = Any
 
 from services.search_replace_service import SearchReplaceService
 from services.update_service import GitHubReleaseUpdater
 from services import sync_service
 
-from views.dialogs.translation_preview_dialog import TranslationPreviewDialog
-from views.dialogs.progress_dialog import ProgressDialog
-from views.workers.ai_translate_worker import AITranslateWorker
+# Dialogs/Workers são importados sob demanda (melhora startup)
 
 from parsers.autodetect import select_parser
 from parsers.manager import get_parser_manager
@@ -85,8 +77,8 @@ class MainWindow(QMainWindow):
         self._open_files: dict[str, FileTab] = {}
 
         self._ai_thread: QThread | None = None
-        self._ai_worker: AITranslateWorker | None = None
-        self._ai_progress: ProgressDialog | None = None
+        self._ai_worker: Any = None
+        self._ai_progress: Any = None
 
         self._ai_ctx: dict | None = None
 
@@ -400,12 +392,14 @@ class MainWindow(QMainWindow):
         return project
 
     def _open_project(self):
+        from views.dialogs.open_project_dialog import OpenProjectDialog
         dlg = OpenProjectDialog(self.core, self)
         if not dlg.exec():
             return
         self._load_project(dlg.project_path)
 
     def _create_project(self):
+        from views.dialogs.create_project_dialog import CreateProjectDialog
         dlg = CreateProjectDialog(self.core, self)
         if not dlg.exec():
             return
@@ -457,6 +451,7 @@ class MainWindow(QMainWindow):
             pass
 
     def _open_project_settings(self):
+        from views.dialogs.project_settings_dialog import ProjectSettingsDialog
         if not self.current_project:
             QMessageBox.information(
                 self,
@@ -689,6 +684,9 @@ class MainWindow(QMainWindow):
             tab.redo()
 
     def _translate_current_file_with_ai(self):
+        from views.dialogs.progress_dialog import ProgressDialog
+        from views.workers.ai_translate_worker import AITranslateWorker
+        from views.dialogs.translation_preview_dialog import TranslationPreviewDialog
         tab = self._current_file_tab()
         if not tab or not self.current_project:
             return
@@ -944,6 +942,7 @@ class MainWindow(QMainWindow):
         self._refresh_project_state()
 
     def _login(self):
+        from views.dialogs.login_dialog import LoginDialog
         dlg = LoginDialog(self)
         if dlg.exec():
             self.current_user = dlg.username
@@ -980,15 +979,19 @@ class MainWindow(QMainWindow):
             self.action_logout.setVisible(False)
 
     def _open_plugins(self):
+        from views.dialogs.plugin_manager_dialog import PluginManagerDialog
         PluginManagerDialog(self).exec()
 
     def _open_qa(self):
+        from views.dialogs.qa_dialog import QADialog
         QADialog(self).exec()
 
     def _open_glossary(self):
+        from views.dialogs.glossary_dialog import GlossaryDialog
         GlossaryDialog(self).exec()
 
     def _open_tm(self):
+        from views.dialogs.translation_memory_dialog import TranslationMemoryDialog
         TranslationMemoryDialog(self).exec()
 
     def _open_about(self):
@@ -1013,10 +1016,12 @@ class MainWindow(QMainWindow):
 
 
     def _open_preferences(self):
+        from views.dialogs.preferences_dialog import PreferencesDialog
         PreferencesDialog(self).exec()
 
 
     def _open_search(self):
+        from views.dialogs.search_dialog import SearchDialog
         """Abre o diálogo de busca (Ctrl+F)."""
         allow_project = bool(self.current_project)
         default_scope = "project" if allow_project else "file"
