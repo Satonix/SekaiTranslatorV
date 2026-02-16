@@ -1,55 +1,77 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
+from typing import Optional
 
-from .manager import get_parser_manager, reload_parsers
-from .repository import RepoSpec, install_or_update_repo, is_repo_installed, get_installed_parser_ids
+from .manager import get_parser_manager
+from .repository import (
+    RepoSpec,
+    install_or_update_repo as _install_or_update_repo,
+    is_repo_installed,
+    list_remote_parsers,
+    install_parser_from_repo as _install_parser_from_repo,
+    remove_installed_parser as _remove_installed_parser,
+)
 
 
-def list_parsers() -> dict:
-    """
-    Retorna infos dos parsers carregados (builtin/external) para UI.
-    Não faz download. Só lista o que está disponível no disco e carregado pelo manager.
-    """
-    mgr = get_parser_manager()
+def _default_spec() -> RepoSpec:
+    return RepoSpec(
+        repo_url="https://github.com/Satonix/SekaiTranslator-Parsers",
+        branch="main",
+    )
 
-    items: list[dict[str, Any]] = []
-    for rp in mgr.registry.all():
-        p = rp.plugin
-        items.append(
+
+def update_repo_from_github(spec: Optional[RepoSpec] = None) -> dict:
+    spec = spec or _default_spec()
+    _install_or_update_repo(spec)
+    return {
+        "repo_installed": is_repo_installed(),
+        "spec": asdict(spec),
+    }
+
+
+def install_or_update_repo(spec: Optional[RepoSpec] = None) -> dict:
+    return update_repo_from_github(spec)
+
+
+def install_parser(folder: str, spec: Optional[RepoSpec] = None) -> dict:
+    spec = spec or _default_spec()
+    if not is_repo_installed():
+        _install_or_update_repo(spec)
+    _install_parser_from_repo(folder)
+    return {"ok": True, "folder": folder, "repo_installed": is_repo_installed(), "spec": asdict(spec)}
+
+
+def list_parsers(spec: Optional[RepoSpec] = None) -> dict:
+    spec = spec or _default_spec()
+
+    pm = get_parser_manager(force_reload=True)
+    installed = []
+    for p in pm.registry.all():
+        plug = getattr(p, "plugin", None)
+        installed.append(
             {
-                "plugin_id": (getattr(p, "plugin_id", "") or "").strip(),
-                "name": (getattr(p, "name", "") or "").strip(),
-                "extensions": sorted({str(e).lower() for e in (getattr(p, "extensions", None) or set())}),
-                "source": rp.source,
+                "plugin_id": getattr(plug, "plugin_id", ""),
+                "name": getattr(plug, "name", ""),
+                "extensions": sorted(list(getattr(plug, "extensions", set()) or [])),
+                "is_builtin": bool(getattr(p, "is_builtin", False)),
+                "folder": getattr(p, "folder", ""),
             }
         )
 
+    available = []
+    try:
+        available = list_remote_parsers(spec.repo_url, branch=spec.branch)
+    except Exception:
+        available = []
+
     return {
-        "repo_installed": bool(is_repo_installed()),
-        "repo_folders": get_installed_parser_ids(),
-        "parsers": sorted(items, key=lambda x: (x["source"], x["plugin_id"])),
+        "repo_installed": is_repo_installed(),
+        "spec": asdict(spec),
+        "installed": installed,
+        "available": available,
     }
 
 
-def update_repo_from_github(
-    *,
-    owner: str = "Satonix",
-    name: str = "SekaiTranslator-Parsers",
-    branch: str = "main",
-    timeout: float = 60.0,
-) -> dict:
-    """
-    Baixa/atualiza o repo de parsers e recarrega o manager.
-    """
-    spec = RepoSpec(owner=owner, name=name, branch=branch)
-    installed = install_or_update_repo(spec=spec, timeout=timeout)
-
-    reload_parsers()
-
-    return {
-        "status": "ok",
-        "installed": int(installed),
-        "repo": asdict(spec),
-    }
+def remove_external_parser(parser_folder_or_id: str) -> bool:
+    return _remove_installed_parser(parser_folder_or_id)

@@ -6,24 +6,14 @@ from typing import Any, List, Optional
 
 from .loader import load_plugin_from_plugin_py
 from .registry import ParserRegistry
-from .repository import repo_dir, parsers_base_dir
+from .repository import installed_dir, parsers_base_dir
 
 
 def external_parsers_dir() -> Path:
-    """
-    Pasta onde os parsers externos ficam instalados.
-
-    Padrão (novo):
-      %LOCALAPPDATA%\\SekaiTranslator\\Parsers\\repo\\<parser>\\plugin.py
-
-    Compat (legado):
-      %LOCALAPPDATA%\\SekaiTranslator\\Parsers\\<parser>\\plugin.py
-    """
-    return repo_dir()
+    return installed_dir()
 
 
 def external_parsers_legacy_dir() -> Path:
-    
     return parsers_base_dir() / "Parsers"
 
 
@@ -36,7 +26,6 @@ class ParserManager:
         return rp.plugin if rp else None
 
     def all_plugins(self) -> List[Any]:
-        # Hot path (auto-detect): evita re-alocar lista quando o registro não mudou.
         cached = getattr(self, "_plugins_cache", None)
         cached_n = getattr(self, "_plugins_cache_n", None)
 
@@ -74,7 +63,6 @@ def _discover_from_dir(reg: ParserRegistry, folder: Path, *, source: str, prefix
             plugin = load_plugin_from_plugin_py(plugin_py, unique_name=unique_name)
             reg.register(plugin, source=source)
         except Exception:
-            
             continue
 
 
@@ -85,10 +73,7 @@ def get_parser_manager(force_reload: bool = False) -> ParserManager:
 
     reg = ParserRegistry()
 
-    
     _discover_from_dir(reg, external_parsers_dir(), source="external", prefix="sekai_parser_external")
-
-    
     _discover_from_dir(reg, external_parsers_legacy_dir(), source="external", prefix="sekai_parser_external_legacy")
 
     _MANAGER = ParserManager(registry=reg)

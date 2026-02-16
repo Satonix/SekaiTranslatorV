@@ -5,179 +5,187 @@ from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
-    QLabel,
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QLabel,
     QMessageBox,
-    QTabWidget,
-    QWidget,
 )
 
-from parsers.manager import get_parser_manager, reload_parsers
-from parsers.repository import install_from_github_zip, remove_external_parser
+from parsers.api import list_parsers, install_or_update_repo, install_parser, remove_external_parser
 
 
-REPO_OWNER = "Satonix"
-REPO_NAME = "SekaiTranslator-Parsers"
-REPO_BRANCH = "main"
+KIND_HEADER = "header"
+KIND_AVAILABLE = "available"
+KIND_INSTALLED = "installed"
 
 
 class PluginManagerDialog(QDialog):
-    """
-    Gerenciador com abas:
-    - Parsers (real): instala/recarrega/remove parsers externos
-    - Plugins (placeholder): mantém o dummy por enquanto
-    """
-
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.setWindowTitle("Gerenciador de Plugins")
-        self.resize(620, 420)
-        self.setModal(True)
+        self.setWindowTitle("Gerenciador de Extensões")
+        self.resize(720, 460)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        self._info_label = QLabel("")
+        self._list = QListWidget()
 
-        title = QLabel("Gerenciador")
-        title.setStyleSheet("font-size: 14px; font-weight: bold;")
-        layout.addWidget(title)
+        self._btn_repo = QPushButton("Baixar/Atualizar repositório")
+        self._btn_install = QPushButton("Instalar selecionado")
+        self._btn_remove = QPushButton("Remover selecionado")
+        self._btn_close = QPushButton("Fechar")
 
-        self.tabs = QTabWidget()
-        layout.addWidget(self.tabs, 1)
+        self._btn_repo.clicked.connect(self._install_from_repo)
+        self._btn_install.clicked.connect(self._install_selected)
+        self._btn_remove.clicked.connect(self._remove_selected)
+        self._btn_close.clicked.connect(self.accept)
+        self._list.currentItemChanged.connect(self._sync_buttons)
 
-        self.parsers_tab = self._build_parsers_tab()
-        self.plugins_tab = self._build_plugins_tab()
+        root = QVBoxLayout(self)
+        root.addWidget(self._info_label)
+        root.addWidget(self._list, 1)
 
-        self.tabs.addTab(self.parsers_tab, "Parsers")
-        self.tabs.addTab(self.plugins_tab, "Plugins")
+        row = QHBoxLayout()
+        row.addWidget(self._btn_repo)
+        row.addWidget(self._btn_install)
+        row.addWidget(self._btn_remove)
+        row.addStretch(1)
+        row.addWidget(self._btn_close)
+        root.addLayout(row)
 
         self._reload_parsers_list()
 
-    def _build_parsers_tab(self) -> QWidget:
-        w = QWidget()
-        outer = QVBoxLayout(w)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(8)
-
-        hint = QLabel(
-            "Parsers definem como o SekaiTranslator extrai e reconstrói texto.\n"
-        )
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color: #888;")
-        outer.addWidget(hint)
-
-        self.parsers_list = QListWidget()
-        self.parsers_list.setSelectionMode(QListWidget.SingleSelection)
-        outer.addWidget(self.parsers_list, 1)
-
-        btns = QHBoxLayout()
-        btns.addStretch()
-
-        self.btn_install = QPushButton("Instalar/Atualizar do GitHub")
-        self.btn_remove = QPushButton("Remover Selecionado")
-        self.btn_reload = QPushButton("Recarregar")
-
-        btns.addWidget(self.btn_install)
-        btns.addWidget(self.btn_remove)
-        btns.addWidget(self.btn_reload)
-
-        outer.addLayout(btns)
-
-        self.btn_install.clicked.connect(self._install_from_repo)
-        self.btn_remove.clicked.connect(self._remove_selected_parser)
-        self.btn_reload.clicked.connect(self._reload_parsers_list)
-
-        self.parsers_list.itemSelectionChanged.connect(self._refresh_parsers_buttons)
-
-        return w
+    def _add_header(self, text: str) -> None:
+        it = QListWidgetItem(text)
+        it.setFlags(Qt.ItemIsEnabled)
+        it.setData(Qt.UserRole, KIND_HEADER)
+        it.setData(Qt.UserRole + 1, "")
+        it.setData(Qt.UserRole + 2, "")
+        self._list.addItem(it)
 
     def _reload_parsers_list(self) -> None:
-        try:
-            reload_parsers()
-        except Exception:
-            pass
+        self._list.clear()
 
-        self.parsers_list.clear()
+        info = list_parsers()
+        repo_ok = bool(info.get("repo_installed", False))
+        installed = info.get("installed") or []
+        available = info.get("available") or []
 
-        mgr = get_parser_manager()
-        reg_items = mgr.registry.all()
+        self._info_label.setText(
+            "Repositório: " + ("instalado" if repo_ok else "não instalado") +
+            f" | Instalados: {len(installed)} | Disponíveis: {len(available)}"
+        )
 
-        def _sort_key(rp):
-            src = getattr(rp, "source", "")
-            p = rp.plugin
-            name = getattr(p, "name", getattr(p, "plugin_id", ""))
-            return (0 if src == "builtin" else 1, str(name).lower())
+        installed_by_folder = {((p.get("folder") or "").strip()): p for p in installed if (p.get("folder") or "").strip()}
+        installed_ids = {((p.get("plugin_id") or "").strip()) for p in installed if (p.get("plugin_id") or "").strip()}
 
-        for rp in sorted(reg_items, key=_sort_key):
-            p = rp.plugin
-            pid = getattr(p, "plugin_id", "")
-            name = getattr(p, "name", pid)
-            src = rp.source
+        self._add_header("Instalados")
+        installed_sorted = sorted(installed, key=lambda p: (p.get("name") or p.get("plugin_id") or "").lower())
+        if not installed_sorted:
+            it = QListWidgetItem("(nenhum)")
+            it.setFlags(Qt.ItemIsEnabled)
+            it.setData(Qt.UserRole, KIND_HEADER)
+            self._list.addItem(it)
+        else:
+            for p in installed_sorted:
+                pid = (p.get("plugin_id") or "").strip()
+                name = (p.get("name") or "").strip() or pid or "(sem nome)"
+                exts = p.get("extensions") or []
+                folder = (p.get("folder") or "").strip() or ""
+                label = f"{name}  ({', '.join(exts)})"
+                it = QListWidgetItem(label)
+                it.setData(Qt.UserRole, KIND_INSTALLED)
+                it.setData(Qt.UserRole + 1, folder)
+                it.setData(Qt.UserRole + 2, pid)
+                self._list.addItem(it)
 
-            exts = getattr(p, "extensions", None) or set()
-            ext_txt = ", ".join(sorted({str(e).lower() for e in exts})) if exts else "auto"
+        self._add_header("Disponíveis (repo)")
+        available_sorted = sorted(available, key=lambda p: (p.get("name") or p.get("plugin_id") or "").lower())
+        if not available_sorted:
+            it = QListWidgetItem("(nenhum)")
+            it.setFlags(Qt.ItemIsEnabled)
+            it.setData(Qt.UserRole, KIND_HEADER)
+            self._list.addItem(it)
+        else:
+            for p in available_sorted:
+                pid = (p.get("plugin_id") or "").strip()
+                name = (p.get("name") or "").strip() or pid or "(sem nome)"
+                exts = p.get("extensions") or []
+                folder = (p.get("folder") or "").strip()
 
-            label = f"{name}  —  {pid}   [{src}]   (ext: {ext_txt})"
-            it = QListWidgetItem(label)
-            it.setData(Qt.UserRole, {"plugin_id": pid, "source": src})
-            self.parsers_list.addItem(it)
+                installed_flag = False
+                if folder and folder in installed_by_folder:
+                    installed_flag = True
+                elif pid and pid in installed_ids:
+                    installed_flag = True
 
-        self._refresh_parsers_buttons()
+                suffix = " — instalado" if installed_flag else ""
+                label = f"{name}  ({', '.join(exts)}){suffix}"
+                it = QListWidgetItem(label)
+                it.setData(Qt.UserRole, KIND_AVAILABLE)
+                it.setData(Qt.UserRole + 1, folder)
+                it.setData(Qt.UserRole + 2, pid)
+                self._list.addItem(it)
 
-    def _refresh_parsers_buttons(self) -> None:
-        it = self.parsers_list.currentItem()
+        self._sync_buttons()
+
+    def _sync_buttons(self) -> None:
+        it = self._list.currentItem()
         if not it:
-            self.btn_remove.setEnabled(False)
+            self._btn_install.setEnabled(False)
+            self._btn_remove.setEnabled(False)
             return
 
-        meta = it.data(Qt.UserRole) or {}
-        src = (meta.get("source") or "").strip()
-        self.btn_remove.setEnabled(src == "external")
+        kind = it.data(Qt.UserRole) or ""
+        self._btn_install.setEnabled(kind == KIND_AVAILABLE and bool((it.data(Qt.UserRole + 1) or "").strip()))
+        self._btn_remove.setEnabled(kind == KIND_INSTALLED and bool((it.data(Qt.UserRole + 1) or "").strip()))
 
     def _install_from_repo(self) -> None:
         try:
-            self.btn_install.setEnabled(False)
-            self.btn_remove.setEnabled(False)
-            self.btn_reload.setEnabled(False)
-
-            install_from_github_zip(
-                "https://github.com/Satonix/SekaiTranslator-Parsers",
-                branch="main",
-            )
-
-
-            QMessageBox.information(
-                self,
-                "Parsers",
-                f"Parsers instalados/atualizados do repositório:\n{REPO_OWNER}/{REPO_NAME}",
-            )
+            install_or_update_repo()
+            QMessageBox.information(self, "Extensões", "Repositório atualizado com sucesso.")
         except Exception as e:
-            QMessageBox.critical(self, "Erro", str(e))
-        finally:
-            self.btn_install.setEnabled(True)
-            self.btn_reload.setEnabled(True)
-            self._reload_parsers_list()
+            QMessageBox.critical(self, "Extensões", f"Falha ao atualizar repositório:\n\n{e}")
+        self._reload_parsers_list()
 
-    def _remove_selected_parser(self) -> None:
-        it = self.parsers_list.currentItem()
+    def _install_selected(self) -> None:
+        it = self._list.currentItem()
+        if not it:
+            return
+        kind = it.data(Qt.UserRole) or ""
+        if kind != KIND_AVAILABLE:
+            return
+
+        folder = (it.data(Qt.UserRole + 1) or "").strip()
+        if not folder:
+            QMessageBox.critical(self, "Extensões", "Item inválido: folder vazio.")
+            return
+
+        try:
+            install_parser(folder)
+            QMessageBox.information(self, "Extensões", f"Instalado: {folder}")
+        except Exception as e:
+            QMessageBox.critical(self, "Extensões", f"Falha ao instalar:\n\n{e}")
+
+        self._reload_parsers_list()
+
+    def _remove_selected(self) -> None:
+        it = self._list.currentItem()
         if not it:
             return
 
-        meta = it.data(Qt.UserRole) or {}
-        pid = (meta.get("plugin_id") or "").strip()
-        src = (meta.get("source") or "").strip()
-        if src != "external":
+        kind = it.data(Qt.UserRole) or ""
+        if kind != KIND_INSTALLED:
             return
 
-        folder_name = pid
+        folder = (it.data(Qt.UserRole + 1) or "").strip()
+        if not folder:
+            return
 
         res = QMessageBox.question(
             self,
-            "Remover parser",
-            f"Remover o parser externo:\n{pid}\n\nIsso apagará a pasta:\n{folder_name}",
+            "Remover extensão",
+            f"Remover:\n\n{it.text()}",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -185,55 +193,8 @@ class PluginManagerDialog(QDialog):
             return
 
         try:
-            remove_external_parser(folder_name)
-            QMessageBox.information(self, "Parsers", f"Parser removido: {pid}")
+            remove_external_parser(folder)
         except Exception as e:
-            QMessageBox.critical(self, "Erro", str(e))
-        finally:
-            self._reload_parsers_list()
+            QMessageBox.critical(self, "Extensões", f"Falha ao remover:\n\n{e}")
 
-    def _build_plugins_tab(self) -> QWidget:
-        w = QWidget()
-        outer = QVBoxLayout(w)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(8)
-
-        title = QLabel("Plugins (WIP)")
-        title.setStyleSheet("font-weight: bold;")
-        outer.addWidget(title)
-
-        self.plugin_list = QListWidget()
-        outer.addWidget(self.plugin_list, 1)
-
-        self._load_dummy_plugins()
-
-        btns = QHBoxLayout()
-        btns.addStretch()
-
-        self.btn_add = QPushButton("Adicionar")
-        self.btn_remove2 = QPushButton("Remover")
-        self.btn_reload2 = QPushButton("Recarregar")
-
-        btns.addWidget(self.btn_add)
-        btns.addWidget(self.btn_remove2)
-        btns.addWidget(self.btn_reload2)
-
-        outer.addLayout(btns)
-
-        self.btn_add.clicked.connect(self._wip)
-        self.btn_remove2.clicked.connect(self._wip)
-        self.btn_reload2.clicked.connect(self._wip)
-
-        return w
-
-    def _load_dummy_plugins(self) -> None:
-        self.plugin_list.clear()
-        plugins = [
-            "Visual: Colored Names",
-            "QA: Line Overflow",
-            "Glossary: Common Terms",
-        ]
-        self.plugin_list.addItems(plugins)
-
-    def _wip(self) -> None:
-        QMessageBox.information(self, "Em desenvolvimento", "Funcionalidade ainda não implementada.")
+        self._reload_parsers_list()
