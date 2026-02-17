@@ -64,10 +64,15 @@ class EditSession:
 
             entry["translation"] = text
 
-            if text.strip():
-                entry["status"] = "in_progress"
-            else:
-                entry["status"] = "untranslated"
+            # IMPORTANTE:
+            # Não devemos marcar como UNTRANSLATED durante digitação.
+            # Se o usuário tiver um filtro de status ativo (ex.: ocultar UNTRANSLATED),
+            # apagar o texto faria a linha sumir da tabela, a seleção mudar e a sessão
+            # ser limpa — causando efeitos visuais (ex.: nomes de personagem “sumirem”)
+            # e impedindo commit correto.
+            #
+            # Durante edição, qualquer mudança mantém o status como IN_PROGRESS.
+            entry["status"] = "in_progress"
 
     def commit(self) -> list[int]:
         """

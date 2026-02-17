@@ -33,6 +33,7 @@ else:
 from services.search_replace_service import SearchReplaceService
 from services.update_service import GitHubReleaseUpdater
 from services import sync_service
+from views.dialogs.translation_preview_dialog import TranslationPreviewDialog
 
 # Dialogs/Workers são importados sob demanda (melhora startup)
 

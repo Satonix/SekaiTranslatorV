@@ -39,6 +39,10 @@ class TranslationEditor(QPlainTextEdit):
         self._session: EditSession | None = None
         self._rows: list[int] = []
 
+        # Guard against recursive normalization when we need to restore the
+        # invariant "1 line = 1 entry" (e.g. Ctrl+A + Backspace collapses blocks).
+        self._internal_change: bool = False
+
         self.textChanged.connect(self._on_text_changed)
 
     def bind_edit_session(self, session: EditSession):
@@ -148,16 +152,48 @@ class TranslationEditor(QPlainTextEdit):
         self._on_text_changed()
 
     def _on_text_changed(self):
+        if self._internal_change:
+            return
+
         if not self._session or not self._session.is_active():
             return
 
         doc = self.document()
-        lines = []
+        lines: list[str] = []
 
         block = doc.firstBlock()
         while block.isValid():
             lines.append(block.text())
             block = block.next()
+
+        # Enforce: exactly N blocks (one per selected entry).
+        # Deleting across multiple lines can remove newline separators and collapse
+        # the document into fewer blocks, which makes the gutter shrink and leaves
+        # stale translations in non-first entries.
+        n = len(self._session.entries)
+        if n > 0 and len(lines) != n:
+            normalized = (lines[:n] + [""] * max(0, n - len(lines)))[:n]
+
+            # Preserve cursor as best-effort.
+            cur = self.textCursor()
+            cur_block = max(0, min(cur.blockNumber(), n - 1))
+            cur_pos = max(0, cur.positionInBlock())
+
+            self._internal_change = True
+            self.blockSignals(True)
+            try:
+                self.setPlainText("\n".join(normalized))
+                b = self.document().findBlockByNumber(cur_block)
+                if b.isValid():
+                    c2 = QTextCursor(b)
+                    c2.setPosition(b.position() + min(cur_pos, len(b.text())))
+                    self.setTextCursor(c2)
+            finally:
+                self.blockSignals(False)
+                self._internal_change = False
+
+            self._session.on_text_edited(normalized)
+            return
 
         self._session.on_text_edited(lines)
 
