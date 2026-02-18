@@ -1469,48 +1469,48 @@ class MainWindow(QMainWindow):
             )
 
 
-def _start_update_install(self, info) -> None:
-    if not getattr(self, "update_service", None):
-        QMessageBox.critical(self, "Atualizações", "Update service não inicializado.")
-        return
+    def _start_update_install(self, info) -> None:
+        if not getattr(self, "update_service", None):
+            QMessageBox.critical(self, "Atualizações", "Update service não inicializado.")
+            return
 
-    dlg = ProgressDialog(self, title="Atualização", message="Baixando atualização...", show_cancel=True)
-    dlg.set_range(0, 100)
-    dlg.set_value(0)
-    dlg.show()
+        dlg = ProgressDialog(self, title="Atualização", message="Baixando atualização...", show_cancel=True)
+        dlg.set_range(0, 100)
+        dlg.set_value(0)
+        dlg.show()
 
-    worker = _UpdateWorker(self.update_service, info)
-    th = QThread(self)
-    worker.moveToThread(th)
+        worker = _UpdateWorker(self.update_service, info)
+        th = QThread(self)
+        worker.moveToThread(th)
 
-    dlg.canceled.connect(worker.cancel)
-    worker.progress.connect(dlg.set_value)
+        dlg.canceled.connect(worker.cancel)
+        worker.progress.connect(dlg.set_value)
 
-    def _fail(msg: str):
-        try:
-            dlg.close()
-        except Exception:
-            pass
-        QMessageBox.critical(self, "Erro ao atualizar", msg)
-        try:
-            th.quit()
-            th.wait(2000)
-        except Exception:
-            pass
+        def _fail(msg: str):
+            try:
+                dlg.close()
+            except Exception:
+                pass
+            QMessageBox.critical(self, "Erro ao atualizar", msg)
+            try:
+                th.quit()
+                th.wait(2000)
+            except Exception:
+                pass
 
-    def _done():
-        try:
-            dlg.close()
-        except Exception:
-            pass
-        try:
-            th.quit()
-        except Exception:
-            pass
-        QApplication.quit()
+        def _done():
+            try:
+                dlg.close()
+            except Exception:
+                pass
+            try:
+                th.quit()
+            except Exception:
+                pass
+            QApplication.quit()
 
-    worker.failed.connect(_fail)
-    worker.finished.connect(_done)
-    th.started.connect(worker.run)
-    th.start()
+        worker.failed.connect(_fail)
+        worker.finished.connect(_done)
+        th.started.connect(worker.run)
+        th.start()
 
