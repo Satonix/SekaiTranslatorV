@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -18,9 +18,18 @@ class ParseContext:
     file_path: str
     original_text: str
 
+    # Campos opcionais para facilitar parsers mais robustos.
+    # Mantidos com defaults para não quebrar chamadas existentes.
+    encoding: str = ""
+    options: dict[str, Any] = field(default_factory=dict)
+
     @property
     def path(self) -> Path:
         return Path(self.file_path)
+
+    def splitlines(self, *, keepends: bool = True) -> list[str]:
+        """Convenience: acesso consistente ao texto original em linhas."""
+        return self.original_text.splitlines(keepends=keepends)
 
 
 class ParserPlugin(Protocol):

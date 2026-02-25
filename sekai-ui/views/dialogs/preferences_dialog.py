@@ -123,7 +123,7 @@ class PreferencesDialog(QDialog):
         self._load()
 
     def _settings(self) -> QSettings:
-        return QSettings("SekaiTranslator", "SekaiTranslator")
+        return QSettings("SekaiTranslatorV", "SekaiTranslatorV")
 
     def _default_auth_url(self) -> str:
         env = (os.environ.get("SEKAI_AUTH_URL") or "").strip()

@@ -16,7 +16,7 @@ from views.editor_panel import EditorPanel
 
 from models.undo_stack import UndoStack, UndoAction, UndoItem
 from models import project_state_store
-
+from services.encoding_service import EncodingService
 
 class FileTab(QWidget):
     """
@@ -38,6 +38,10 @@ class FileTab(QWidget):
         self.parser = None
         self.parse_ctx = None
 
+        # Metadados de I/O (round-trip)
+        self.input_encoding: str = ""
+        self.newline_style: str = ""
+        self.had_bom: bool = False
 
         self._entries: list[dict] = []
         self._pending_select_entry_id: str | None = None
@@ -336,7 +340,14 @@ class FileTab(QWidget):
     def save_project_state(self, project: dict) -> None:
         if not self.file_path:
             return
-        project_state_store.save_file_state(project, self.file_path, self._entries)
+        project_state_store.save_file_state(
+            project,
+            self.file_path,
+            self._entries,
+            encoding=(self.input_encoding or getattr(self.parse_ctx, "encoding", "") or ""),
+            newline_style=(self.newline_style or ""),
+            had_bom=bool(self.had_bom),
+        )
         self.set_dirty(False)
 
     def load_project_state_if_exists(self, project: dict) -> None:
@@ -346,6 +357,11 @@ class FileTab(QWidget):
         st = project_state_store.load_file_state(project, self.file_path)
         if not st:
             return
+
+        # Se já detectamos encoding/newlines antes, reaproveita.
+        self.input_encoding = (getattr(st, "encoding", "") or "").strip() or self.input_encoding
+        self.newline_style = (getattr(st, "newline_style", "") or "").strip() or self.newline_style
+        self.had_bom = bool(getattr(st, "had_bom", False) or self.had_bom)
 
         saved = st.entries
 
@@ -394,10 +410,15 @@ class FileTab(QWidget):
         """
         Rebuild via parser plugin e grava em compute_export_path (NUNCA no original).
 
-        Regras:
-        - Se parser.rebuild() retornar bytes/bytearray -> salva em modo binário (wb)
-        - Se retornar str -> salva em modo texto (w) usando project["encoding"]
+        Agora respeita SEMPRE:
+        - project["export_encoding"]
+        - project["export_bom"]
+
+        Mesmo se parser.rebuild() retornar bytes: tentamos decodificar como texto e re-encode.
+        Se falhar (provável binário), salvamos bytes como vieram.
         """
+        import codecs
+
         if not self.file_path:
             raise RuntimeError("file_path não definido no FileTab")
 
@@ -412,22 +433,76 @@ class FileTab(QWidget):
         out_path = self.compute_export_path(project, self.file_path)
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-        if isinstance(out_data, (bytes, bytearray)):
+        # ---------- resolve encodings ----------
+        encoding_in = (
+            (getattr(ctx, "encoding", "") or "").strip()
+            or (self.input_encoding or "").strip()
+            or (project.get("encoding") or "utf-8").strip()
+            or "utf-8"
+        )
+
+        encoding_out = (project.get("export_encoding") or "").strip() or encoding_in
+        export_bom = bool(project.get("export_bom") or False)
+
+        # newline: prefere o que você já detectou no load/state
+        newline_style = (self.newline_style or "").strip()
+        if not newline_style:
+            opts = getattr(ctx, "options", None)
+            if isinstance(opts, dict):
+                newline_style = (opts.get("newline_style") or "").strip()
+        if not newline_style:
+            newline_style = EncodingService.detect_newline_style_text(getattr(ctx, "original_text", "")) or "\n"
+
+        def _normalize_newlines(text: str) -> str:
+            t = text.replace("\r\n", "\n").replace("\r", "\n")
+            if newline_style == "\r\n":
+                t = t.replace("\n", "\r\n")
+            return t
+
+        def _encode_with_bom(text: str) -> bytes:
+            low = encoding_out.lower().replace("_", "-").strip()
+
+            if export_bom:
+                if low in ("utf-8", "utf8"):
+                    return codecs.BOM_UTF8 + text.encode("utf-8")
+                if low in ("utf-16", "utf16"):
+                    # utf-16 do Python já inclui BOM (endianness default)
+                    return text.encode("utf-16")
+                if low in ("utf-16-le", "utf16-le", "utf-16le"):
+                    return codecs.BOM_UTF16_LE + text.encode("utf-16-le")
+                if low in ("utf-16-be", "utf16-be", "utf-16be"):
+                    return codecs.BOM_UTF16_BE + text.encode("utf-16-be")
+                # BOM não se aplica à maioria dos encodings legados (cp932, shift_jis etc.)
+                return text.encode(encoding_out)
+
+            return text.encode(encoding_out)
+
+        # ---------- handle output types ----------
+        if isinstance(out_data, str):
+            text = _normalize_newlines(out_data)
+            data = _encode_with_bom(text)
             with open(out_path, "wb") as f:
-                f.write(bytes(out_data))
-        else:
-            if not isinstance(out_data, str):
-                raise RuntimeError("parser.rebuild() deve retornar str ou bytes/bytearray")
-            encoding = (project.get("encoding") or "utf-8").strip() or "utf-8"
+                f.write(data)
+            return out_path
+
+        if isinstance(out_data, (bytes, bytearray)):
+            raw = bytes(out_data)
+
+            # Tenta tratar como texto e re-encode (isso destrava o "sempre utf-8")
             try:
-                "".encode(encoding)
+                text = raw.decode(encoding_in)
+                text = _normalize_newlines(text)
+                data = _encode_with_bom(text)
+                with open(out_path, "wb") as f:
+                    f.write(data)
+                return out_path
             except Exception:
-                encoding = "utf-8"
-            with open(out_path, "w", encoding=encoding, errors="replace") as f:
-                f.write(out_data)
+                # Provável binário; salva como veio
+                with open(out_path, "wb") as f:
+                    f.write(raw)
+                return out_path
 
-        return out_path
-
+        raise RuntimeError("parser.rebuild() deve retornar str ou bytes/bytearray")
 
     def snapshot_rows(self, rows: list[int]) -> list[dict]:
         snap: list[dict] = []

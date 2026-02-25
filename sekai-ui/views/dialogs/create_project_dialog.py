@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton,
-    QFileDialog, QMessageBox, QComboBox
+    QFileDialog, QMessageBox, QComboBox, QTabWidget, QWidget
 )
 
 from parsers.manager import get_parser_manager, reload_parsers
@@ -38,56 +38,74 @@ class CreateProjectDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        layout.addWidget(QLabel("Nome do projeto"))
-        self.name_edit = QLineEdit()
-        layout.addWidget(self.name_edit)
+        self.tabs = QTabWidget()
+        layout.addWidget(self.tabs)
 
-        layout.addWidget(QLabel("Pasta do jogo"))
+        # ---------------------
+        # Aba Projeto
+        # ---------------------
+        tab_project = QWidget()
+        p_layout = QVBoxLayout(tab_project)
+
+        p_layout.addWidget(QLabel("Nome do projeto"))
+        self.name_edit = QLineEdit()
+        p_layout.addWidget(self.name_edit)
+
+        p_layout.addWidget(QLabel("Pasta do jogo"))
         root_layout = QHBoxLayout()
         self.root_edit = QLineEdit()
         browse = QPushButton("Selecionar...")
         browse.clicked.connect(self._browse)
         root_layout.addWidget(self.root_edit)
         root_layout.addWidget(browse)
-        layout.addLayout(root_layout)
+        p_layout.addLayout(root_layout)
 
-        layout.addWidget(QLabel("Encoding do texto"))
-        self.encoding = QComboBox()
-        self.encoding.addItem("Detectar automaticamente", "auto")
-        self.encoding.addItems([
-            "utf-8",
-            "utf-8-sig",
-            "cp932",
-            "shift_jis",
-        ])
-        layout.addWidget(self.encoding)
-
-        layout.addWidget(QLabel("Idioma original"))
+        p_layout.addWidget(QLabel("Idioma original"))
         self.source_lang = QComboBox()
         for c, n in LANGUAGES.items():
             if c != "pt-BR":
                 self.source_lang.addItem(n, c)
-        layout.addWidget(self.source_lang)
+        p_layout.addWidget(self.source_lang)
 
-        layout.addWidget(QLabel("Idioma da tradução"))
+        p_layout.addWidget(QLabel("Idioma da tradução"))
         self.target_lang = QComboBox()
         for c, n in LANGUAGES.items():
             self.target_lang.addItem(n, c)
-        layout.addWidget(self.target_lang)
+        p_layout.addWidget(self.target_lang)
 
-        layout.addWidget(QLabel("Parser do jogo"))
-        self.parser = QComboBox()
-        layout.addWidget(self.parser)
+        p_layout.addStretch()
+        self.tabs.addTab(tab_project, "Projeto")
+
+        # ---------------------
+        # Aba Engine
+        # ---------------------
+        tab_engine = QWidget()
+        e_layout = QVBoxLayout(tab_engine)
+
+        e_layout.addWidget(QLabel("Engine"))
+        self.engine = QComboBox()
+        e_layout.addWidget(self.engine)
+
+        e_layout.addWidget(QLabel("Perfis"))
+        self.profile = QComboBox()
+        self.profile.setEnabled(False)
+        e_layout.addWidget(self.profile)
 
         btn_refresh = QPushButton("Recarregar parsers")
         btn_refresh.clicked.connect(self._reload_parsers)
-        layout.addWidget(btn_refresh)
+        e_layout.addWidget(btn_refresh)
 
-        self._reload_parsers()
+        e_layout.addStretch()
+        self.tabs.addTab(tab_engine, "Engine")
 
+        # Footer
         btn = QPushButton("Criar Projeto")
         btn.clicked.connect(self._create)
         layout.addWidget(btn)
+
+        self.engine.currentIndexChanged.connect(self._refresh_profiles)
+
+        self._reload_parsers()
 
     def _browse(self):
         path = QFileDialog.getExistingDirectory(self, "Selecione a pasta do jogo")
@@ -99,40 +117,78 @@ class CreateProjectDialog(QDialog):
         Carrega parsers do registry (repo/external).
         Inclui Auto-detect (parser_id vazio).
         """
-        self.parser.clear()
+        self.engine.clear()
+        self.profile.clear()
 
         try:
             mgr = reload_parsers()
         except Exception:
             mgr = get_parser_manager()
 
-        self.parser.addItem("Auto-detect (recomendado)", "")
-
         plugins = mgr.all_plugins() if mgr else []
-        items: list[tuple[str, str]] = []
 
+        ids: set[str] = set()
+        meta_by_id: dict[str, tuple[str, set[str]]] = {}
         for p in plugins:
             pid = (getattr(p, "plugin_id", "") or "").strip()
-            name = (getattr(p, "name", "") or "").strip()
-            exts = getattr(p, "extensions", None) or set()
-
             if not pid:
                 continue
+            name = (getattr(p, "name", "") or "").strip() or pid
+            exts = set(str(e).lower() for e in (getattr(p, "extensions", None) or set()) if str(e).strip())
+            ids.add(pid)
+            meta_by_id[pid] = (name, exts)
 
-            label = name or pid
+        if not ids:
+            self.engine.addItem("Nenhum parser instalado (instale via Plugins → Parsers)", "__none__")
+            self.profile.setEnabled(False)
+            return
+
+        base_to_profiles: dict[str, list[str]] = {}
+        for eid in sorted(ids):
+            if "." in eid:
+                candidate = eid.rsplit(".", 1)[0]
+                if candidate in ids:
+                    prof = eid[len(candidate) + 1 :]
+                    base_to_profiles.setdefault(candidate, []).append(prof)
+                    continue
+            base_to_profiles.setdefault(eid, [])
+
+        items: list[tuple[str, str]] = []
+        for base_id in base_to_profiles.keys():
+            name, exts = meta_by_id.get(base_id, (base_id, set()))
+            label = name
             if exts:
-                label = f"{label}  ({', '.join(sorted({str(e).lower() for e in exts}))})"
-
-            items.append((label, pid))
+                label = f"{label}  ({', '.join(sorted(exts))})"
+            items.append((label, base_id))
 
         items.sort(key=lambda t: t[0].lower())
+        for label, base_id in items:
+            self.engine.addItem(label, base_id)
 
-        for label, pid in items:
-            self.parser.addItem(label, pid)
+        self._base_to_profiles = {k: sorted(set(v)) for k, v in base_to_profiles.items()}
+        self._refresh_profiles()
 
-        if self.parser.count() == 1:
-            self.parser.addItem("Nenhum parser instalado (instale via Plugins → Parsers)", "__none__")
-            self.parser.setCurrentIndex(1)
+    def _refresh_profiles(self):
+        base_id = str(self.engine.currentData() or "").strip()
+        self.profile.blockSignals(True)
+        try:
+            self.profile.clear()
+            if not base_id or base_id == "__none__":
+                self.profile.setEnabled(False)
+                return
+
+            profiles = list((getattr(self, "_base_to_profiles", {}) or {}).get(base_id, []) or [])
+            if not profiles:
+                self.profile.addItem("(Sem perfis)", "")
+                self.profile.setEnabled(False)
+                return
+
+            self.profile.addItem("Padrão", "")
+            for p in profiles:
+                self.profile.addItem(str(p), str(p))
+            self.profile.setEnabled(True)
+        finally:
+            self.profile.blockSignals(False)
 
     def _detect_encoding(self, root_path: str) -> str:
         """
@@ -159,13 +215,18 @@ class CreateProjectDialog(QDialog):
     def _create(self):
         name = self.name_edit.text().strip()
         root = self.root_edit.text().strip()
-        parser_id = (self.parser.currentData() or "").strip()
+        engine_id = (self.engine.currentData() or "").strip()
+        profile = (self.profile.currentData() or "").strip()
+
+        parser_id = ""
+        if engine_id and engine_id != "__none__":
+            parser_id = f"{engine_id}.{profile}" if profile else engine_id
 
         if not name or not root:
             QMessageBox.warning(self, "Erro", "Nome do projeto e pasta do jogo são obrigatórios.")
             return
 
-        if parser_id == "__none__":
+        if engine_id == "__none__":
             QMessageBox.warning(
                 self,
                 "Parser",
@@ -174,21 +235,25 @@ class CreateProjectDialog(QDialog):
             )
             return
 
-        enc_data = self.encoding.currentData()
-        if enc_data == "auto":
-            encoding = self._detect_encoding(root)
-        else:
-            encoding = self.encoding.currentText()
-
-        resp = self.core.send("project.create", {
+        # Encoding de entrada é sempre o do arquivo original (detectado por arquivo)
+        payload = {
             "name": name,
             "game_root": root,
-            "encoding": encoding,
+            "encoding": "auto",
+            "export_encoding": "utf-8",
             "engine": "",
             "parser_id": parser_id,
             "source_language": self.source_lang.currentData(),
             "target_language": self.target_lang.currentData(),
-        })
+        }
+
+        # Prefer UI-side persistence (sekai-core project persistence ainda é instável)
+        from services.local_project_service import LocalProjectService
+        try:
+            project = LocalProjectService().create_project(payload)
+            resp = {"status": "ok", "payload": {"project_path": project["project_path"], "project": project}}
+        except Exception as e:
+            resp = {"status": "error", "message": str(e)}
 
         if resp.get("status") != "ok":
             QMessageBox.critical(

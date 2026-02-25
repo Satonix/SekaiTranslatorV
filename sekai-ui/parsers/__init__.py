@@ -1,11 +1,3 @@
-from .api import list_parsers, update_repo_from_github
-from .autodetect import select_parser
-from .base import ParseContext, ParserError
+from .api import ParsersAPI, list_parsers, update_repo_from_github
 
-__all__ = [
-    "list_parsers",
-    "update_repo_from_github",
-    "select_parser",
-    "ParseContext",
-    "ParserError",
-]
+__all__ = ["ParsersAPI", "list_parsers", "update_repo_from_github"]

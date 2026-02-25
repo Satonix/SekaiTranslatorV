@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QPlainTextEdit
-from PySide6.QtGui import QTextOption, QFont, QKeyEvent, QTextCursor
+from PySide6.QtGui import QTextOption, QFont, QKeyEvent, QTextCursor, QTextBlockFormat
 from PySide6.QtCore import Qt, Signal
 
 from models.edit_session import EditSession
@@ -56,13 +56,46 @@ class TranslationEditor(QPlainTextEdit):
             self.setPlainText("")
             return
 
-        lines = [e.get("translation", "") for e in self._session.entries]
+        # Keep the invariant "1 line = 1 entry".
+        # Some sources may leave trailing newlines inside fields; if we join
+        # them as-is, it creates blank blocks between selected entries.
+        def _norm_line(v: object) -> str:
+            s = v if isinstance(v, str) else ""
+            s = s.replace("\r", "")
+            # Never allow embedded newlines inside a single entry.
+            s = s.replace("\n", "")
+            return s
+
+        lines = [_norm_line(e.get("translation", "")) for e in self._session.entries]
 
         self.blockSignals(True)
         self.setPlainText("\n".join(lines))
         self.blockSignals(False)
 
+        # Add a small paragraph spacing so multi-selection reads like "padding"
+        # instead of blank lines.
+        try:
+            self._apply_block_padding(px=6)
+        except Exception:
+            pass
+
         self.verticalScrollBar().setValue(0)
+
+    def _apply_block_padding(self, *, px: int = 6) -> None:
+        doc = self.document()
+        cursor = QTextCursor(doc)
+        cursor.beginEditBlock()
+        try:
+            block = doc.firstBlock()
+            while block.isValid():
+                c = QTextCursor(block)
+                fmt = block.blockFormat()
+                fmt.setTopMargin(0)
+                fmt.setBottomMargin(float(px))
+                c.setBlockFormat(fmt)
+                block = block.next()
+        finally:
+            cursor.endEditBlock()
 
     def keyPressEvent(self, event: QKeyEvent):
         if not self._session or not self._session.is_active():

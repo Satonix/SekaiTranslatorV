@@ -1,76 +1,75 @@
 from __future__ import annotations
 
-import os
-
-from .base import ParseContext, ParserError
-from .manager import get_parser_manager
+from parsers.base import ParseContext
+from parsers.manager import get_parser_manager
 
 
-def _plugin_exts_lower(plugin) -> set[str]:
+def autodetect_parser_id(ctx: ParseContext, text: str) -> str | None:
+    """Retorna o parser_id mais provável para o arquivo atual."""
+
+    mgr = get_parser_manager()
+    best_id: str | None = None
+    best_score = 0.0
+
+    for meta in mgr.list_available():
+        pid = meta.get("id")
+        if not pid:
+            continue
+        p = mgr.get_parser(pid)
+        if not p:
+            continue
+        score = float(p.detect(ctx, text))
+        if score > best_score:
+            best_score = score
+            best_id = pid
+
+    return best_id
+
+
+def select_parser(
+    ctx: ParseContext,
+    text: str,
+    parser_id: str | None = None,
+    allow_autodetect: bool = True,
+    raise_on_fail: bool = True,
+):
+    """Seleciona um parser.
+
+    - Se ``parser_id`` for fornecido, tenta carregar esse.
+    - Caso contrário, faz autodetect (se permitido).
     """
-    Retorna um set de extensões em lowercase para o plugin.
 
-    Cacheia no próprio objeto do plugin para evitar recriação (hot path em auto-detect).
-    """
-    cached = getattr(plugin, "_sekai_exts_lower", None)
-    if isinstance(cached, set):
-        return cached
-
-    exts = getattr(plugin, "extensions", None) or set()
-    out = {str(e).lower() for e in exts if e}
-    setattr(plugin, "_sekai_exts_lower", out)
-    return out
-
-
-def select_parser(project: dict, file_path: str, text: str):
-    """
-    Estratégia:
-    1) Se project.parser_id existir, usa ele.
-    2) Senão, ranqueia detect(ctx, text).
-    3) Se ninguém pontuar > 0, levanta ParserError.
-    """
     mgr = get_parser_manager()
 
-    parser_id = (project.get("parser_id") or "").strip()
-    if parser_id:
-        p = mgr.get(parser_id)
+    def _try_get_with_fallback(pid_in: str):
+        """Try to resolve parser ids like 'kirikiri.ks.yandere' when only
+        'kirikiri.ks' exists. Falls back by trimming suffix segments."""
+        pid_try = (pid_in or "").strip()
+        while pid_try:
+            p = mgr.get_parser(pid_try)
+            if p:
+                return p
+            if "." not in pid_try:
+                break
+            pid_try = pid_try.rsplit(".", 1)[0]
+        return None
+
+    pid = (parser_id or "").strip() or None
+    if not pid and allow_autodetect:
+        pid = autodetect_parser_id(ctx, text)
+
+    if pid:
+        p = _try_get_with_fallback(pid)
         if p:
             return p
 
-    ctx = ParseContext(
-        project=project,
-        file_path=file_path,
-        original_text=text,
-    )
+    if allow_autodetect:
+        pid2 = autodetect_parser_id(ctx, text)
+        if pid2:
+            p2 = _try_get_with_fallback(pid2)
+            if p2:
+                return p2
 
-    ext = os.path.splitext(file_path)[1].lower()
-
-    best = None
-    best_score = 0.0
-
-    plugins = mgr.all_plugins()  # evita chamar duas vezes (e re-alocar lista)
-    for p in plugins:
-        try:
-            exts = _plugin_exts_lower(p)
-            if exts and ext not in exts:
-                continue
-
-            score = float(p.detect(ctx, text) or 0.0)
-            if score > best_score:
-                best_score = score
-                best = p
-        except Exception:
-            continue
-
-    if best is not None and best_score > 0.0:
-        return best
-
-    available = sorted(pid for pid in (getattr(p, "plugin_id", "") for p in plugins) if pid)
-
-    raise ParserError(
-        "Nenhum parser compatível foi detectado.\n\n"
-        f"Arquivo: {file_path}\n"
-        f"Extensão: {ext or '(sem extensão)'}\n"
-        f"Parsers disponíveis: {', '.join(available) or '(nenhum)'}\n\n"
-        "Instale parsers em Plugins → Parsers."
-    )
+    if raise_on_fail:
+        raise RuntimeError("Nenhum parser compatível encontrado. Verifique o repo de parsers.")
+    return None

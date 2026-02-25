@@ -87,7 +87,7 @@ class LoginDialog(QDialog):
             pass
 
     def _settings(self) -> QSettings:
-        return QSettings("SekaiTranslator", "SekaiTranslator")
+        return QSettings("SekaiTranslatorV", "SekaiTranslatorV")
 
     def _auth_url(self) -> str:
         """

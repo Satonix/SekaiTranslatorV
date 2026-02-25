@@ -51,17 +51,12 @@ class OpenProjectDialog(QDialog):
     def _load_projects(self):
         self.list.clear()
 
-        resp = self.core.send("project.list")
-
-        if resp.get("status") != "ok":
-            QMessageBox.critical(
-                self,
-                "Erro",
-                resp.get("message", "Erro ao listar projetos")
-            )
+        from services.local_project_service import LocalProjectService
+        try:
+            projects = LocalProjectService().list_projects()
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", str(e))
             return
-
-        projects = resp["payload"].get("projects", [])
 
         if not projects:
             self.list.addItem("(Nenhum projeto encontrado)")

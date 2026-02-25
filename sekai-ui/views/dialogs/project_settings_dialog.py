@@ -1,5 +1,6 @@
-
 from __future__ import annotations
+
+import copy
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -18,7 +19,6 @@ from PySide6.QtWidgets import (
 )
 
 from views.dialogs.project_settings_tab import ProjectSettingsTab
-
 from parsers.manager import get_parser_manager
 
 
@@ -31,7 +31,7 @@ class ProjectSettingsDialog(QDialog):
       - IA
       - Engine
 
-    Salva no dicionário do projeto (self.project) e chama callback opcional.
+    Salva em uma cópia do dicionário do projeto e chama callback opcional.
     """
 
     PRESET_LABELS = {
@@ -44,7 +44,8 @@ class ProjectSettingsDialog(QDialog):
     def __init__(self, parent=None, *, project: dict | None = None, on_save=None):
         super().__init__(parent)
 
-        self.project = project if isinstance(project, dict) else {}
+        # sempre trabalha com cópia interna para não corromper o dict do caller
+        self._project: dict = copy.deepcopy(project) if isinstance(project, dict) else {}
         self._on_save = on_save
 
         self.setWindowTitle("Configurações do Projeto")
@@ -61,18 +62,11 @@ class ProjectSettingsDialog(QDialog):
         self.project_tab = ProjectSettingsTab(self)
         self.tabs.addTab(self.project_tab, "Projeto")
 
-        self._inject_parser_picker(self.project_tab)
-
         self.ai_tab = self._build_ai_tab()
         self.tabs.addTab(self.ai_tab, "IA")
 
-        self.tabs.addTab(
-            self._placeholder_tab(
-                "Configurações específicas da engine do jogo.\n\n"
-                "Parsers, flags e opções avançadas."
-            ),
-            "Engine",
-        )
+        self.engine_tab = self._build_engine_tab()
+        self.tabs.addTab(self.engine_tab, "Engine")
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -90,57 +84,118 @@ class ProjectSettingsDialog(QDialog):
 
         self._load_from_project()
 
-    def _inject_parser_picker(self, tab: QWidget) -> None:
-        """
-        Adiciona um seletor de parser_id na aba Projeto.
-        Salva em project["parser_id"].
-        """
-        layout = tab.layout()
-        if layout is None:
-            layout = QVBoxLayout(tab)
-            layout.setContentsMargins(12, 12, 12, 12)
-            layout.setSpacing(10)
+    # -----------------------
+    # Engine tab
+    # -----------------------
+    def _build_engine_tab(self) -> QWidget:
+        w = QWidget()
+        outer = QVBoxLayout(w)
+        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setSpacing(10)
 
-        box = QGroupBox("Parser do projeto")
+        box = QGroupBox("Engine do projeto")
         form = QFormLayout(box)
         form.setLabelAlignment(Qt.AlignLeft)
         form.setFormAlignment(Qt.AlignTop)
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(8)
 
-        self.cmb_parser_id = QComboBox()
-        self.cmb_parser_id.setToolTip(
-            "Define qual parser será usado por padrão neste projeto.\n"
-            "Se estiver em Auto, o app tentará detectar o melhor parser para cada arquivo."
-        )
+        self.cmb_engine = QComboBox()
+        self.cmb_profile = QComboBox()
+        self.cmb_profile.setEnabled(False)
 
-        self.cmb_parser_id.addItem("Auto-detect (recomendado)", "")
-
-        mgr = get_parser_manager()
-        plugins = []
-        for p in mgr.all_plugins():
-            pid = (getattr(p, "plugin_id", "") or "").strip()
-            name = (getattr(p, "name", "") or "").strip()
-            if pid:
-                plugins.append((pid, name or pid))
-
-        plugins.sort(key=lambda x: x[1].lower())
-
-        for pid, name in plugins:
-            self.cmb_parser_id.addItem(f"{name}  ({pid})", pid)
-
-        form.addRow("Parser:", self.cmb_parser_id)
+        form.addRow("Engine:", self.cmb_engine)
+        form.addRow("Perfis:", self.cmb_profile)
 
         hint = QLabel(
-            "Se você instalar/atualizar parsers via Plugins → Parsers, eles aparecem aqui.\n"
-            "O valor é salvo no projeto como parser_id."
+            "A engine define o formato do script (ex.: KiriKiri .ks).\n"
+            "Perfis organizam variações por jogo (ex.: yandere)."
         )
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #888;")
         form.addRow("", hint)
 
-        layout.addWidget(box)
+        outer.addWidget(box)
+        outer.addStretch()
 
+        self.cmb_engine.currentIndexChanged.connect(self._refresh_profiles)
+
+        self._reload_engine_lists()
+        return w
+
+    def _reload_engine_lists(self) -> None:
+        self.cmb_engine.clear()
+        self.cmb_profile.clear()
+
+        mgr = get_parser_manager()
+        plugins = mgr.all_plugins() if mgr else []
+
+        ids: set[str] = set()
+        meta_by_id: dict[str, tuple[str, set[str]]] = {}
+        for p in plugins:
+            pid = (getattr(p, "plugin_id", "") or "").strip()
+            if not pid:
+                continue
+            name = (getattr(p, "name", "") or "").strip() or pid
+            exts = set(str(e).lower() for e in (getattr(p, "extensions", None) or set()) if str(e).strip())
+            ids.add(pid)
+            meta_by_id[pid] = (name, exts)
+
+        self._engine_ids = ids
+        base_to_profiles: dict[str, list[str]] = {}
+        for eid in sorted(ids):
+            if "." in eid:
+                candidate = eid.rsplit(".", 1)[0]
+                if candidate in ids:
+                    prof = eid[len(candidate) + 1 :]
+                    base_to_profiles.setdefault(candidate, []).append(prof)
+                    continue
+            base_to_profiles.setdefault(eid, [])
+
+        self._base_to_profiles = {k: sorted(set(v)) for k, v in base_to_profiles.items()}
+
+        self.cmb_engine.addItem("Auto-detect (recomendado)", "")
+
+        items: list[tuple[str, str]] = []
+        for base_id in base_to_profiles.keys():
+            name, exts = meta_by_id.get(base_id, (base_id, set()))
+            label = name
+            if exts:
+                label = f"{label}  ({', '.join(sorted(exts))})"
+            items.append((label, base_id))
+
+        items.sort(key=lambda t: t[0].lower())
+        for label, base_id in items:
+            self.cmb_engine.addItem(label, base_id)
+
+        self._refresh_profiles()
+
+    def _refresh_profiles(self) -> None:
+        base_id = str(self.cmb_engine.currentData() or "").strip()
+        self.cmb_profile.blockSignals(True)
+        try:
+            self.cmb_profile.clear()
+            if not base_id:
+                self.cmb_profile.addItem("(Auto)", "")
+                self.cmb_profile.setEnabled(False)
+                return
+
+            profiles = list((getattr(self, "_base_to_profiles", {}) or {}).get(base_id, []) or [])
+            if not profiles:
+                self.cmb_profile.addItem("(Sem perfis)", "")
+                self.cmb_profile.setEnabled(False)
+                return
+
+            self.cmb_profile.addItem("Padrão", "")
+            for p in profiles:
+                self.cmb_profile.addItem(str(p), str(p))
+            self.cmb_profile.setEnabled(True)
+        finally:
+            self.cmb_profile.blockSignals(False)
+
+    # -----------------------
+    # AI tab
+    # -----------------------
     def _build_ai_tab(self) -> QWidget:
         w = QWidget()
         outer = QVBoxLayout(w)
@@ -182,33 +237,54 @@ class ProjectSettingsDialog(QDialog):
         self.cmb_prompt_preset.currentIndexChanged.connect(self._refresh_ai_ui)
         return w
 
-    def _placeholder_tab(self, text: str) -> QWidget:
-        w = QWidget()
-        l = QVBoxLayout(w)
-        l.setContentsMargins(12, 12, 12, 12)
-        l.setSpacing(8)
+    def _refresh_ai_ui(self) -> None:
+        preset = self.cmb_prompt_preset.currentData()
+        is_custom = (preset == "custom")
+        self.txt_custom_prompt.setEnabled(is_custom)
+        self.txt_custom_prompt.setVisible(is_custom)
 
-        label = QLabel(text)
-        label.setWordWrap(True)
-        label.setStyleSheet("color: #888;")
-
-        l.addWidget(label)
-        l.addStretch()
-        return w
-
+    # -----------------------
+    # Load / collect
+    # -----------------------
     def _load_from_project(self) -> None:
-        if hasattr(self, "project_tab"):
-            self.project_tab.load_project(self.project)
+        # Projeto tab
+        self.project_tab.load_project(self._project)
 
-        if hasattr(self, "cmb_parser_id"):
-            pid = (self.project.get("parser_id") or "").strip()
-            idx = self.cmb_parser_id.findData(pid)
+        # Engine/Profile (derivados de parser_id)
+        pid = (self._project.get("parser_id") or "").strip()
+        if not pid:
+            self.cmb_engine.setCurrentIndex(max(0, self.cmb_engine.findData("")))
+            self._refresh_profiles()
+        else:
+            ids = getattr(self, "_engine_ids", set()) or set()
+            base = pid
+            prof = ""
+
+            if pid not in ids and "." in pid:
+                cand = pid.rsplit(".", 1)[0]
+                if cand in ids:
+                    base = cand
+                    prof = pid[len(cand) + 1 :]
+            else:
+                if "." in pid:
+                    cand = pid.rsplit(".", 1)[0]
+                    if cand in ids and pid != cand:
+                        base = cand
+                        prof = pid[len(cand) + 1 :]
+
+            idx = self.cmb_engine.findData(base)
             if idx < 0:
-                idx = self.cmb_parser_id.findData("")
-            self.cmb_parser_id.setCurrentIndex(max(0, idx))
+                idx = self.cmb_engine.findData("")
+            self.cmb_engine.setCurrentIndex(max(0, idx))
+            self._refresh_profiles()
 
-        preset = (self.project.get("ai_prompt_preset") or "default").strip() or "default"
-        custom = (self.project.get("ai_custom_prompt_text") or "").strip()
+            pidx = self.cmb_profile.findData(prof)
+            if pidx < 0:
+                pidx = self.cmb_profile.findData("")
+            self.cmb_profile.setCurrentIndex(max(0, pidx))
+
+        preset = (self._project.get("ai_prompt_preset") or "default").strip() or "default"
+        custom = (self._project.get("ai_custom_prompt_text") or "").strip()
 
         idx = self.cmb_prompt_preset.findData(preset)
         if idx < 0:
@@ -218,41 +294,55 @@ class ProjectSettingsDialog(QDialog):
 
         self._refresh_ai_ui()
 
-    def _refresh_ai_ui(self) -> None:
-        preset = self.cmb_prompt_preset.currentData()
-        is_custom = (preset == "custom")
-        self.txt_custom_prompt.setEnabled(is_custom)
-        self.txt_custom_prompt.setVisible(is_custom)
+    def _collect_updated_project(self) -> dict:
+        """
+        Coleta valores das tabs e devolve um dict NOVO pronto para salvar.
+        Não modifica o dict do caller.
+        """
+        updated = copy.deepcopy(self._project)
 
-    def _collect_to_project(self) -> None:
-        if hasattr(self, "project_tab"):
-            self.project_tab.apply_to_project(self.project)
+        # Projeto tab (valida e escreve no dict)
+        self.project_tab.apply_to_project(updated)
 
-        if hasattr(self, "cmb_parser_id"):
-            pid = str(self.cmb_parser_id.currentData() or "").strip()
-            self.project["parser_id"] = pid
+        # parser_id (engine/profile)
+        base = str(self.cmb_engine.currentData() or "").strip()
+        prof = str(self.cmb_profile.currentData() or "").strip()
+        updated["parser_id"] = "" if not base else (f"{base}.{prof}" if prof else base)
 
+        # IA
         preset = str(self.cmb_prompt_preset.currentData() or "default").strip() or "default"
         custom = self.txt_custom_prompt.toPlainText().strip()
+        updated["ai_prompt_preset"] = preset
+        updated["ai_custom_prompt_text"] = custom if preset == "custom" else ""
 
-        self.project["ai_prompt_preset"] = preset
-        self.project["ai_custom_prompt_text"] = custom if preset == "custom" else ""
+        # garante que project_path nunca some
+        if not updated.get("project_path") and self._project.get("project_path"):
+            updated["project_path"] = self._project.get("project_path")
 
-    def _save(self):
+        return updated
+
+    def _save(self) -> None:
         """
-        Salva no dict do projeto e chama callback opcional.
+        Coleta + salva via callback.
         """
         try:
-            self._collect_to_project()
+            updated = self._collect_updated_project()
 
-            if callable(self._on_save):
-                self._on_save(self.project)
+            if not callable(self._on_save):
+                raise RuntimeError("Callback on_save não definido.")
 
-            QMessageBox.information(
-                self,
-                "Configurações do Projeto",
-                "Configurações salvas.",
-            )
+            # Salva e recebe o projeto REAL persistido (dict final)
+            saved = self._on_save(updated)
+            if not isinstance(saved, dict):
+                saved = updated
+
+            # Atualiza o estado interno do dialog
+            self._project = copy.deepcopy(saved)
+
+            # Recarrega as tabs (garante que o combo reflita export_encoding/export_bom)
+            self._load_from_project()
+
+            QMessageBox.information(self, "Configurações do Projeto", "Configurações salvas.")
             self.accept()
 
         except Exception as e:

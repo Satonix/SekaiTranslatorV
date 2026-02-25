@@ -3,198 +3,102 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
-    QVBoxLayout,
     QHBoxLayout,
+    QLabel,
     QListWidget,
     QListWidgetItem,
-    QPushButton,
-    QLabel,
     QMessageBox,
+    QPushButton,
+    QVBoxLayout,
 )
 
-from parsers.api import list_parsers, install_or_update_repo, install_parser, remove_external_parser
-
-
-KIND_HEADER = "header"
-KIND_AVAILABLE = "available"
-KIND_INSTALLED = "installed"
+from parsers.api import ParsersAPI
 
 
 class PluginManagerDialog(QDialog):
-    def __init__(self, parent=None):
+    """Gerencia parsers (formato Opção A).
+
+    No formato novo, os parsers vivem em um único repo Python e são
+    listados via registry. A UI oferece apenas "Atualizar".
+    """
+
+    def __init__(self, parent=None, repo_url: str | None = None):
         super().__init__(parent)
+        self.setWindowTitle("Parsers")
+        self.setMinimumSize(720, 420)
 
-        self.setWindowTitle("Gerenciador de Extensões")
-        self.resize(720, 460)
+        self.api = ParsersAPI(repo_url=repo_url)
 
-        self._info_label = QLabel("")
-        self._list = QListWidget()
+        self.listw = QListWidget(self)
+        self.listw.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
 
-        self._btn_repo = QPushButton("Baixar/Atualizar repositório")
-        self._btn_install = QPushButton("Instalar selecionado")
-        self._btn_remove = QPushButton("Remover selecionado")
-        self._btn_close = QPushButton("Fechar")
+        self.lbl_info = QLabel("", self)
+        self.lbl_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.lbl_info.setWordWrap(True)
 
-        self._btn_repo.clicked.connect(self._install_from_repo)
-        self._btn_install.clicked.connect(self._install_selected)
-        self._btn_remove.clicked.connect(self._remove_selected)
-        self._btn_close.clicked.connect(self.accept)
-        self._list.currentItemChanged.connect(self._sync_buttons)
+        self.btn_refresh = QPushButton("Recarregar lista", self)
+        self.btn_update = QPushButton("Atualizar repo", self)
+        self.btn_close = QPushButton("Fechar", self)
 
-        root = QVBoxLayout(self)
-        root.addWidget(self._info_label)
-        root.addWidget(self._list, 1)
+        top = QHBoxLayout()
+        top.addWidget(QLabel("Parsers disponíveis (repo externo):", self))
+        top.addStretch(1)
+        top.addWidget(self.btn_update)
+        top.addWidget(self.btn_refresh)
 
-        row = QHBoxLayout()
-        row.addWidget(self._btn_repo)
-        row.addWidget(self._btn_install)
-        row.addWidget(self._btn_remove)
-        row.addStretch(1)
-        row.addWidget(self._btn_close)
-        root.addLayout(row)
+        bottom = QHBoxLayout()
+        bottom.addStretch(1)
+        bottom.addWidget(self.btn_close)
 
-        self._reload_parsers_list()
+        lay = QVBoxLayout(self)
+        lay.addLayout(top)
+        lay.addWidget(self.listw, 1)
+        lay.addWidget(self.lbl_info)
+        lay.addLayout(bottom)
 
-    def _add_header(self, text: str) -> None:
-        it = QListWidgetItem(text)
-        it.setFlags(Qt.ItemIsEnabled)
-        it.setData(Qt.UserRole, KIND_HEADER)
-        it.setData(Qt.UserRole + 1, "")
-        it.setData(Qt.UserRole + 2, "")
-        self._list.addItem(it)
+        self.btn_close.clicked.connect(self.accept)
+        self.btn_refresh.clicked.connect(self.reload)
+        self.btn_update.clicked.connect(self.update_repo)
+        self.listw.currentItemChanged.connect(self._on_sel)
 
-    def _reload_parsers_list(self) -> None:
-        self._list.clear()
+        self.reload()
 
-        info = list_parsers()
-        repo_ok = bool(info.get("repo_installed", False))
-        installed = info.get("installed") or []
-        available = info.get("available") or []
+    def reload(self) -> None:
+        try:
+            items = self.api.list_available()
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", str(e))
+            return
 
-        self._info_label.setText(
-            "Repositório: " + ("instalado" if repo_ok else "não instalado") +
-            f" | Instalados: {len(installed)} | Disponíveis: {len(available)}"
+        self.listw.clear()
+        for p in items:
+            title = f"{p.get('name') or p.get('id')}  ({p.get('id')})"
+            it = QListWidgetItem(title)
+            it.setData(Qt.ItemDataRole.UserRole, p)
+            self.listw.addItem(it)
+
+        if self.listw.count() > 0:
+            self.listw.setCurrentRow(0)
+
+    def update_repo(self) -> None:
+        try:
+            self.api.update_repo()
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", str(e))
+            return
+        self.reload()
+
+    def _on_sel(self, cur: QListWidgetItem | None, _prev: QListWidgetItem | None) -> None:
+        if not cur:
+            self.lbl_info.setText("")
+            return
+        p = cur.data(Qt.ItemDataRole.UserRole) or {}
+        desc = (p.get("description") or "").strip()
+        exts = ", ".join(p.get("extensions") or [])
+        ver = (p.get("version") or "").strip()
+        self.lbl_info.setText(
+            f"ID: {p.get('id') or ''}\n"
+            f"Versão: {ver}\n"
+            f"Extensões: {exts}\n\n"
+            f"{desc}"
         )
-
-        installed_by_folder = {((p.get("folder") or "").strip()): p for p in installed if (p.get("folder") or "").strip()}
-        installed_ids = {((p.get("plugin_id") or "").strip()) for p in installed if (p.get("plugin_id") or "").strip()}
-
-        self._add_header("Instalados")
-        installed_sorted = sorted(installed, key=lambda p: (p.get("name") or p.get("plugin_id") or "").lower())
-        if not installed_sorted:
-            it = QListWidgetItem("(nenhum)")
-            it.setFlags(Qt.ItemIsEnabled)
-            it.setData(Qt.UserRole, KIND_HEADER)
-            self._list.addItem(it)
-        else:
-            for p in installed_sorted:
-                pid = (p.get("plugin_id") or "").strip()
-                name = (p.get("name") or "").strip() or pid or "(sem nome)"
-                exts = p.get("extensions") or []
-                folder = (p.get("folder") or "").strip() or ""
-                label = f"{name}  ({', '.join(exts)})"
-                it = QListWidgetItem(label)
-                it.setData(Qt.UserRole, KIND_INSTALLED)
-                it.setData(Qt.UserRole + 1, folder)
-                it.setData(Qt.UserRole + 2, pid)
-                self._list.addItem(it)
-
-        self._add_header("Disponíveis (repo)")
-        available_sorted = sorted(available, key=lambda p: (p.get("name") or p.get("plugin_id") or "").lower())
-        if not available_sorted:
-            it = QListWidgetItem("(nenhum)")
-            it.setFlags(Qt.ItemIsEnabled)
-            it.setData(Qt.UserRole, KIND_HEADER)
-            self._list.addItem(it)
-        else:
-            for p in available_sorted:
-                pid = (p.get("plugin_id") or "").strip()
-                name = (p.get("name") or "").strip() or pid or "(sem nome)"
-                exts = p.get("extensions") or []
-                folder = (p.get("folder") or "").strip()
-
-                installed_flag = False
-                if folder and folder in installed_by_folder:
-                    installed_flag = True
-                elif pid and pid in installed_ids:
-                    installed_flag = True
-
-                suffix = " — instalado" if installed_flag else ""
-                label = f"{name}  ({', '.join(exts)}){suffix}"
-                it = QListWidgetItem(label)
-                it.setData(Qt.UserRole, KIND_AVAILABLE)
-                it.setData(Qt.UserRole + 1, folder)
-                it.setData(Qt.UserRole + 2, pid)
-                self._list.addItem(it)
-
-        self._sync_buttons()
-
-    def _sync_buttons(self) -> None:
-        it = self._list.currentItem()
-        if not it:
-            self._btn_install.setEnabled(False)
-            self._btn_remove.setEnabled(False)
-            return
-
-        kind = it.data(Qt.UserRole) or ""
-        self._btn_install.setEnabled(kind == KIND_AVAILABLE and bool((it.data(Qt.UserRole + 1) or "").strip()))
-        self._btn_remove.setEnabled(kind == KIND_INSTALLED and bool((it.data(Qt.UserRole + 1) or "").strip()))
-
-    def _install_from_repo(self) -> None:
-        try:
-            install_or_update_repo()
-            QMessageBox.information(self, "Extensões", "Repositório atualizado com sucesso.")
-        except Exception as e:
-            QMessageBox.critical(self, "Extensões", f"Falha ao atualizar repositório:\n\n{e}")
-        self._reload_parsers_list()
-
-    def _install_selected(self) -> None:
-        it = self._list.currentItem()
-        if not it:
-            return
-        kind = it.data(Qt.UserRole) or ""
-        if kind != KIND_AVAILABLE:
-            return
-
-        folder = (it.data(Qt.UserRole + 1) or "").strip()
-        if not folder:
-            QMessageBox.critical(self, "Extensões", "Item inválido: folder vazio.")
-            return
-
-        try:
-            install_parser(folder)
-            QMessageBox.information(self, "Extensões", f"Instalado: {folder}")
-        except Exception as e:
-            QMessageBox.critical(self, "Extensões", f"Falha ao instalar:\n\n{e}")
-
-        self._reload_parsers_list()
-
-    def _remove_selected(self) -> None:
-        it = self._list.currentItem()
-        if not it:
-            return
-
-        kind = it.data(Qt.UserRole) or ""
-        if kind != KIND_INSTALLED:
-            return
-
-        folder = (it.data(Qt.UserRole + 1) or "").strip()
-        if not folder:
-            return
-
-        res = QMessageBox.question(
-            self,
-            "Remover extensão",
-            f"Remover:\n\n{it.text()}",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if res != QMessageBox.Yes:
-            return
-
-        try:
-            remove_external_parser(folder)
-        except Exception as e:
-            QMessageBox.critical(self, "Extensões", f"Falha ao remover:\n\n{e}")
-
-        self._reload_parsers_list()

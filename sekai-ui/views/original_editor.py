@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QPlainTextEdit
-from PySide6.QtGui import QTextOption, QFont
+from PySide6.QtGui import QTextOption, QFont, QTextCursor
 
 
 class OriginalEditor(QPlainTextEdit):
@@ -32,9 +32,38 @@ class OriginalEditor(QPlainTextEdit):
             self.setPlainText("")
             return
 
-        text = "\n".join(e.get("original", "") for e in self._entries)
+        def _norm_line(v: object) -> str:
+            s = v if isinstance(v, str) else ""
+            s = s.replace("\r", "")
+            # Never allow embedded newlines inside a single entry.
+            s = s.replace("\n", "")
+            return s
+
+        text = "\n".join(_norm_line(e.get("original", "")) for e in self._entries)
         self.setPlainText(text)
+
+        # Small spacing between blocks (reads like padding, not blank lines)
+        try:
+            self._apply_block_padding(px=6)
+        except Exception:
+            pass
         self.verticalScrollBar().setValue(0)
+
+    def _apply_block_padding(self, *, px: int = 6) -> None:
+        doc = self.document()
+        cursor = QTextCursor(doc)
+        cursor.beginEditBlock()
+        try:
+            block = doc.firstBlock()
+            while block.isValid():
+                c = QTextCursor(block)
+                fmt = block.blockFormat()
+                fmt.setTopMargin(0)
+                fmt.setBottomMargin(float(px))
+                c.setBlockFormat(fmt)
+                block = block.next()
+        finally:
+            cursor.endEditBlock()
 
     def get_entry_for_block(self, block_number: int):
         if 0 <= block_number < len(self._entries):

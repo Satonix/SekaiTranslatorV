@@ -4,6 +4,7 @@ import json
 import os
 import re
 import hashlib
+import tempfile
 from dataclasses import dataclass
 from typing import Any
 
@@ -13,9 +14,15 @@ class FileState:
     """
     Estado persistido por arquivo:
     - entries: lista de dicts do core (com translation/status/etc.)
+    - encoding: encoding detectado/usado ao ler o arquivo original
+    - newline_style: "\r\n" ou "\n" detectado no arquivo original
+    - had_bom: se o arquivo original tinha BOM (útil para round-trip)
     """
     file_path: str
     entries: list[dict]
+    encoding: str = ""
+    newline_style: str = ""
+    had_bom: bool = False
 
 
 def _ensure_dir(path: str) -> None:
@@ -27,6 +34,7 @@ def _safe_relpath(root: str, path: str) -> str:
         rel = os.path.relpath(path, root)
     except Exception:
         rel = os.path.basename(path)
+    # normaliza separadores para virar chave estável no Windows
     rel = rel.replace("\\", "/")
     return rel
 
@@ -36,8 +44,18 @@ def _appdata_base_dir() -> str:
     Base única no sistema (não dentro do project_path).
     """
     base = os.environ.get("LOCALAPPDATA", "")
+    app_name = "SekaiTranslatorV"
+
+    # Se existir version.APP_NAME, usa ele para manter consistente com o app
+    try:
+        from version import APP_NAME as _APP_NAME
+        app_name = (_APP_NAME or app_name).strip() or app_name
+    except Exception:
+        pass
+
     if base:
-        return os.path.join(base, "SekaiTranslator")
+        return os.path.join(base, app_name)
+
     return os.path.abspath(os.path.join(".", ".sekai_local"))
 
 
@@ -59,7 +77,7 @@ def _project_key(project: dict) -> str:
     Usa:
     - basename do project_path (normalmente o nome da pasta do projeto)
     - fallback: project.name
-    E adiciona hash curto do (project_path|root_path) para evitar colisões.
+    E adiciona hash curto do (project_path|root_path|name) para evitar colisões.
     """
     project_path = (project.get("project_path") or "").strip()
     root_path = (project.get("root_path") or "").strip()
@@ -82,7 +100,7 @@ def _project_key(project: dict) -> str:
 def state_root(project: dict) -> str:
     """
     Pasta única de estado no sistema:
-    %LOCALAPPDATA%/SekaiTranslator/ProjectStates/<project_key>/
+    %LOCALAPPDATA%/<APP_NAME>/ProjectStates/<project_key>/
     """
     base = _appdata_base_dir()
     return os.path.join(base, "ProjectStates", _project_key(project))
@@ -95,8 +113,26 @@ def state_path_for_file(project: dict, file_path: str) -> str:
     """
     root = project.get("root_path") or ""
     rel = _safe_relpath(root, file_path)
-
     return os.path.join(state_root(project), rel + ".json")
+
+
+def _atomic_write_json(path: str, payload: dict) -> None:
+    d = os.path.dirname(path) or "."
+    _ensure_dir(d)
+
+    fd, tmp = tempfile.mkstemp(prefix=".tmp_", dir=d, text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)  # atomic no Windows
+    finally:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
 
 
 def load_file_state(project: dict, file_path: str) -> FileState | None:
@@ -114,17 +150,36 @@ def load_file_state(project: dict, file_path: str) -> FileState | None:
     if not isinstance(entries, list):
         return None
 
-    return FileState(file_path=file_path, entries=entries)
+    encoding = (data.get("encoding") or "").strip()
+    newline_style = (data.get("newline_style") or "").strip()
+    had_bom = bool(data.get("had_bom") or False)
+
+    return FileState(
+        file_path=file_path,
+        entries=entries,
+        encoding=encoding,
+        newline_style=newline_style,
+        had_bom=had_bom,
+    )
 
 
-def save_file_state(project: dict, file_path: str, entries: list[dict]) -> None:
+def save_file_state(
+    project: dict,
+    file_path: str,
+    entries: list[dict],
+    *,
+    encoding: str = "",
+    newline_style: str = "",
+    had_bom: bool = False,
+) -> None:
     p = state_path_for_file(project, file_path)
-    _ensure_dir(os.path.dirname(p))
 
     payload = {
         "file_path": file_path,
         "entries": entries,
+        "encoding": (encoding or "").strip(),
+        "newline_style": (newline_style or "").strip(),
+        "had_bom": bool(had_bom),
     }
 
-    with open(p, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    _atomic_write_json(p, payload)

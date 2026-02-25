@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import os
@@ -15,26 +14,58 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QComboBox,
-    QMessageBox,
 )
 
-ENCODINGS = [
-    "utf-8",
-    "utf-8-sig",
-    "utf-16",
-    "utf-16-le",
-    "utf-16-be",
-    "cp932",
-    "shift_jis",
-    "euc-jp",
-    "gbk",
-    "gb2312",
-    "big5",
-    "euc-kr",
-    "windows-1252",
-    "windows-1250",
-    "windows-1251",
+EXPORT_ENCODINGS = [
+    ("UTF-8", ("utf-8", False)),
+    ("UTF-8 (com BOM)", ("utf-8", True)),
+    ("UTF-16 LE (com BOM)", ("utf-16-le", True)),
+    ("UTF-16 LE (sem BOM)", ("utf-16-le", False)),
+    ("UTF-16 BE (com BOM)", ("utf-16-be", True)),
+    ("UTF-16 BE (sem BOM)", ("utf-16-be", False)),
+    ("Windows-1252", ("windows-1252", False)),
+    ("Shift_JIS (CP932)", ("cp932", False)),
 ]
+
+
+def _as_pair(v) -> tuple[str, bool] | None:
+    """
+    Qt/PySide pode devolver userData como list (QVariantList), não tuple.
+    Aceita tuple/list de len==2.
+    """
+    if isinstance(v, (tuple, list)) and len(v) == 2:
+        return (str(v[0] or "").strip(), bool(v[1]))
+    return None
+
+
+def _canonicalize_export(enc: str, bom: bool) -> tuple[str, bool]:
+    enc = (enc or "").strip()
+    low = enc.lower().replace("_", "-").strip()
+
+    # compat: utf-16 genérico
+    if low == "utf-16":
+        return ("utf-16-le", True)
+
+    # aliases comuns
+    if low in ("utf-8-sig", "utf8-sig"):
+        return ("utf-8", True)
+
+    if low in ("utf-16-le-bom", "utf16-le-bom", "utf-16le-bom", "utf16le-bom"):
+        return ("utf-16-le", True)
+
+    if low in ("utf-16-be-bom", "utf16-be-bom", "utf-16be-bom", "utf16be-bom"):
+        return ("utf-16-be", True)
+
+    if low in ("utf-16le", "utf16le"):
+        return ("utf-16-le", bool(bom))
+
+    if low in ("utf-16be", "utf16be"):
+        return ("utf-16-be", bool(bom))
+
+    if not low:
+        return ("utf-8", False)
+
+    return (enc, bool(bom))
 
 
 class ProjectSettingsTab(QWidget):
@@ -43,7 +74,8 @@ class ProjectSettingsTab(QWidget):
     Responsável por editar:
       - name
       - root_path
-      - encoding
+      - encoding (entrada): sempre "auto"
+      - export_encoding + export_bom (saída)
       - engine
       - source_language
       - target_language
@@ -92,12 +124,17 @@ class ProjectSettingsTab(QWidget):
 
         form.addRow("Root do jogo:", root_row)
 
-        self.cmb_encoding = QComboBox()
-        for enc in ENCODINGS:
-            self.cmb_encoding.addItem(enc, enc)
-        self.cmb_encoding.setEditable(True)
-        self.cmb_encoding.setInsertPolicy(QComboBox.NoInsert)
-        form.addRow("Encoding:", self.cmb_encoding)
+        # Entrada sempre automática (detectada por arquivo)
+        self.lbl_input_encoding = QLabel("Automático (sempre igual ao arquivo original)")
+        self.lbl_input_encoding.setStyleSheet("color: #888;")
+        self.lbl_input_encoding.setWordWrap(True)
+        form.addRow("Encoding (entrada):", self.lbl_input_encoding)
+
+        # Saída explícita (encoding + BOM)
+        self.cmb_export_encoding = QComboBox()
+        for label, (enc, bom) in EXPORT_ENCODINGS:
+            self.cmb_export_encoding.addItem(label, [enc, bom])  # ✅ salva como list (mais estável no Qt)
+        form.addRow("Encoding (saída):", self.cmb_export_encoding)
 
         self.cmb_engine = QComboBox()
         engines = [
@@ -169,12 +206,41 @@ class ProjectSettingsTab(QWidget):
         self.ed_name.setText((project.get("name") or "").strip())
         self.ed_root_path.setText((project.get("root_path") or "").strip())
 
-        enc = (project.get("encoding") or "utf-8").strip() or "utf-8"
-        idx = self.cmb_encoding.findData(enc)
-        if idx < 0:
-            self.cmb_encoding.setCurrentText(enc)
+        enc_hint = (project.get("encoding") or "auto").strip() or "auto"
+        if enc_hint.lower() != "auto":
+            self.lbl_input_encoding.setText(f"Automático (hint atual: {enc_hint})")
         else:
-            self.cmb_encoding.setCurrentIndex(idx)
+            self.lbl_input_encoding.setText("Automático (sempre igual ao arquivo original)")
+
+        exp_enc = (project.get("export_encoding") or "utf-8").strip() or "utf-8"
+        exp_bom = bool(project.get("export_bom", False))
+        exp_enc, exp_bom = _canonicalize_export(exp_enc, exp_bom)
+
+        # match exato (encoding + bom)
+        idx = -1
+        for i in range(self.cmb_export_encoding.count()):
+            pair = _as_pair(self.cmb_export_encoding.itemData(i))
+            if not pair:
+                continue
+            enc_i, bom_i = pair
+            if enc_i.lower() == exp_enc.lower() and bool(bom_i) == bool(exp_bom):
+                idx = i
+                break
+
+        if idx >= 0:
+            self.cmb_export_encoding.setCurrentIndex(idx)
+        else:
+            # fallback: match só pelo encoding
+            fallback = -1
+            for i in range(self.cmb_export_encoding.count()):
+                pair = _as_pair(self.cmb_export_encoding.itemData(i))
+                if not pair:
+                    continue
+                enc_i, _bom_i = pair
+                if enc_i.lower() == exp_enc.lower():
+                    fallback = i
+                    break
+            self.cmb_export_encoding.setCurrentIndex(fallback if fallback >= 0 else 0)
 
         eng = (project.get("engine") or "").strip()
         idx = self.cmb_engine.findData(eng)
@@ -205,8 +271,25 @@ class ProjectSettingsTab(QWidget):
         """
         name = self.ed_name.text().strip()
         root_path = self.ed_root_path.text().strip()
-        encoding = (self.cmb_encoding.currentText() or "").strip()
-        engine = (self.cmb_engine.currentText() or "").strip()
+
+        # Entrada sempre "auto"
+        encoding = "auto"
+
+        # Saída: par (encoding, bom)
+        export_encoding = ""
+        export_bom = False
+
+        pair = _as_pair(self.cmb_export_encoding.currentData())
+        if pair:
+            export_encoding, export_bom = pair
+        else:
+            export_encoding = str(self.cmb_export_encoding.currentText() or "").strip()
+            export_bom = False
+
+        export_encoding, export_bom = _canonicalize_export(export_encoding, export_bom)
+
+        # Engine precisa salvar o ID (data), não o texto do combo
+        engine = (self.cmb_engine.currentData() or self.cmb_engine.currentText() or "").strip()
 
         source_language = (self.cmb_source_lang.currentText() or "").strip()
         target_language = (self.cmb_target_lang.currentText() or "").strip()
@@ -219,13 +302,19 @@ class ProjectSettingsTab(QWidget):
         if not os.path.isdir(root_path):
             raise ValueError("Root do jogo inválido (a pasta não existe).")
 
-        if not encoding:
-            raise ValueError("Encoding não pode ficar vazio.")
+        if not export_encoding:
+            raise ValueError("Encoding (saída) não pode ficar vazio.")
 
         project["name"] = name
         project["root_path"] = root_path
-        project["encoding"] = encoding
-        project["engine"] = engine
 
+        # Entrada bloqueada
+        project["encoding"] = encoding
+
+        # Saída explícita
+        project["export_encoding"] = export_encoding
+        project["export_bom"] = export_bom
+
+        project["engine"] = engine
         project["source_language"] = source_language
         project["target_language"] = target_language
