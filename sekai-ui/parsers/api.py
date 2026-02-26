@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import os
 import sys
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+from parsers.repository import ParsersRepository
 
-DEFAULT_REPO_URL = "https://github.com/Satonix/SekaiTranslatorVParsers.git"
+
+DEFAULT_REPO_URL = "https://github.com/Satonix/SekaiTranslatorVParsers"
 
 
 def _appdata_repo_dir() -> Path:
@@ -27,30 +28,26 @@ def _ensure_on_syspath(path: Path) -> None:
         sys.path.insert(0, p)
 
 
-def _run_git(args: list[str], cwd: Optional[Path] = None) -> None:
-    cmd = ["git", *args]
-    try:
-        subprocess.check_call(cmd, cwd=str(cwd) if cwd else None)
-    except FileNotFoundError as e:
-        raise RuntimeError(
-            "Git não encontrado. Instale o Git e garanta que 'git' está no PATH."
-        ) from e
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Falha ao executar git: {' '.join(cmd)}") from e
-
-
 def update_repo_from_github(repo_url: str | None = None, repo_dir: Path | None = None) -> Path:
+    """
+    Atualiza o repo de parsers sem Git: baixa ZIP da branch main e extrai em repo_dir.
+    Mantém assinatura para compat com UI antiga.
+    """
     repo_url = (repo_url or DEFAULT_REPO_URL).strip()
     repo_dir = repo_dir or _appdata_repo_dir()
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
 
-    if (repo_dir / ".git").is_dir():
-        _run_git(["pull", "--ff-only"], cwd=repo_dir)
-    else:
-        if repo_dir.exists() and any(repo_dir.iterdir()):
-            # pasta existe e não está vazia
-            raise RuntimeError(f"Diretório de repo já existe e não é um git repo: {repo_dir}")
-        _run_git(["clone", repo_url, str(repo_dir)])
+    repo = ParsersRepository(repo_url=repo_url, branch="main")
+
+    # força usar o repo_dir escolhido pela API (pra compat com UI antiga)
+    # (ParsersRepository usa self._repo_dir internamente)
+    try:
+        repo._repo_dir = repo_dir  # type: ignore[attr-defined]
+    except Exception:
+        # se você preferir, adapte o ParsersRepository pra aceitar repo_dir no __init__
+        pass
+
+    repo.ensure_repo()
 
     # garante import pelo "src/"
     _ensure_on_syspath(_src_dir(repo_dir))
@@ -113,13 +110,7 @@ class ParsersAPI:
             # UI espera list[dict]
             if engines and isinstance(engines[0], str):
                 return [
-                    {
-                        "id": eid,
-                        "name": eid,
-                        "version": "",
-                        "description": "",
-                        "extensions": [],
-                    }
+                    {"id": eid, "name": eid, "version": "", "description": "", "extensions": []}
                     for eid in engines
                 ]
             return engines
@@ -132,19 +123,12 @@ class ParsersAPI:
                 engines = fn2() or []
                 if engines and isinstance(engines[0], str):
                     return [
-                        {
-                            "id": eid,
-                            "name": eid,
-                            "version": "",
-                            "description": "",
-                            "extensions": [],
-                        }
+                        {"id": eid, "name": eid, "version": "", "description": "", "extensions": []}
                         for eid in engines
                     ]
                 return engines
 
         return []
-
 
     # alias esperado por partes da UI antiga
     def list_parsers(self):
