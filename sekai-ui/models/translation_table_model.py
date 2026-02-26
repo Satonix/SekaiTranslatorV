@@ -16,9 +16,11 @@ class TranslationTableModel(QAbstractTableModel):
 
     STATUS_COLORS = {
         "untranslated": None,
-        "in_progress": QColor(116, 120, 18, 160), #747812
-        "translated": QColor(42, 79, 49, 160), #2A4F31
-        "reviewed": QColor(140, 110, 180, 160),
+        # Use opaque colors. Semi-transparent backgrounds can look "invisible"
+        # depending on palette/style and Windows scaling.
+        "in_progress": QColor(116, 120, 18, 255),  # 747812
+        "translated": QColor(42, 79, 49, 255),     # 2A4F31
+        "reviewed": QColor(140, 110, 180, 255),
     }
 
     def __init__(self, entries=None, parent=None):
@@ -81,11 +83,19 @@ class TranslationTableModel(QAbstractTableModel):
 
         if role == Qt.BackgroundRole:
             status = entry.get("status", "untranslated")
-
             if not isinstance(status, str):
                 status = "untranslated"
-
-            return self.STATUS_COLORS.get(status)
+            s = status.strip().lower().replace(" ", "_")
+            # Accept legacy/uppercase variants coming from parsers/core
+            if s in ("untranslated", "not_translated"):
+                s = "untranslated"
+            elif s in ("inprogress", "in_progress"):
+                s = "in_progress"
+            elif s in ("translated", "done"):
+                s = "translated"
+            elif s in ("reviewed", "approved"):
+                s = "reviewed"
+            return self.STATUS_COLORS.get(s)
 
         return None
 

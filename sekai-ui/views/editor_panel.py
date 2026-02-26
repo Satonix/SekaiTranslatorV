@@ -205,4 +205,11 @@ class EditorPanel(QWidget):
             return
 
         self._file_tab.set_dirty(True)
-
+        # Refresh table rows so status color (IN_PROGRESS) is visible immediately.
+        try:
+            for sr in (self._session.rows or []):
+                vr = self._file_tab._visible_row_from_source_row(sr)
+                if vr is not None:
+                    self._file_tab.model.refresh_row(vr)
+        except Exception:
+            pass

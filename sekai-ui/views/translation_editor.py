@@ -43,6 +43,9 @@ class TranslationEditor(QPlainTextEdit):
         # invariant "1 line = 1 entry" (e.g. Ctrl+A + Backspace collapses blocks).
         self._internal_change: bool = False
 
+
+        # True while EditorPanel is loading a new session; prevents marking rows as IN_PROGRESS.
+        self._loading_session: bool = False
         self.textChanged.connect(self._on_text_changed)
 
     def bind_edit_session(self, session: EditSession):
@@ -50,36 +53,43 @@ class TranslationEditor(QPlainTextEdit):
 
     def set_rows(self, rows: list[int]):
         self._rows = rows or []
-
-    def load_from_session(self):
-        if not self._session or not self._session.is_active():
-            self.setPlainText("")
-            return
-
-        # Keep the invariant "1 line = 1 entry".
-        # Some sources may leave trailing newlines inside fields; if we join
-        # them as-is, it creates blank blocks between selected entries.
-        def _norm_line(v: object) -> str:
-            s = v if isinstance(v, str) else ""
-            s = s.replace("\r", "")
-            # Never allow embedded newlines inside a single entry.
-            s = s.replace("\n", "")
-            return s
-
-        lines = [_norm_line(e.get("translation", "")) for e in self._session.entries]
-
-        self.blockSignals(True)
-        self.setPlainText("\n".join(lines))
-        self.blockSignals(False)
-
-        # Add a small paragraph spacing so multi-selection reads like "padding"
-        # instead of blank lines.
+    def load_from_session(self) -> None:
+        # While we are loading a new session, ignore textChanged signals so
+        # selecting a row does not mark it as IN_PROGRESS.
+        self._loading_session = True
         try:
-            self._apply_block_padding(px=6)
-        except Exception:
-            pass
+            if not self._session or not self._session.is_active():
+                self.blockSignals(True)
+                try:
+                    self.setPlainText("")
+                finally:
+                    self.blockSignals(False)
+                return
 
-        self.verticalScrollBar().setValue(0)
+            # Keep the invariant "1 line = 1 entry".
+            def _norm_line(v: object) -> str:
+                s = v if isinstance(v, str) else ""
+                s = s.replace("\r", "")
+                s = s.replace("\n", "")
+                return s
+
+            lines = [_norm_line(e.get("translation", "")) for e in self._session.entries]
+
+            self.blockSignals(True)
+            try:
+                self.setPlainText("\n".join(lines))
+            finally:
+                self.blockSignals(False)
+
+            # Visual spacing (does not create blank lines)
+            try:
+                self._apply_block_padding(px=6)
+            except Exception:
+                pass
+
+            self.verticalScrollBar().setValue(0)
+        finally:
+            self._loading_session = False
 
     def _apply_block_padding(self, *, px: int = 6) -> None:
         doc = self.document()
@@ -185,7 +195,7 @@ class TranslationEditor(QPlainTextEdit):
         self._on_text_changed()
 
     def _on_text_changed(self):
-        if self._internal_change:
+        if self._internal_change or self._loading_session:
             return
 
         if not self._session or not self._session.is_active():

@@ -178,7 +178,9 @@ class ProjectMixin:
         has_tab = self._current_file_tab() is not None
         logged_in = bool(self.api_token)
 
-        self.action_save_project.setEnabled(has_project and len(self._open_files) > 0)
+        # "Salvar Projeto" deve ficar disponível mesmo sem abas abertas.
+        # Caso contrário, dá a impressão de que o projeto/configurações não salvam.
+        self.action_save_project.setEnabled(has_project)
         self.action_export_file.setEnabled(has_project and has_tab)
         self.action_export_batch.setEnabled(has_project)
 
@@ -281,6 +283,16 @@ class ProjectMixin:
     def _save_all_open_files_state(self):
         if not self.current_project:
             return
+
+        # Sempre persiste o project.json também (mesmo sem abas abertas),
+        # para garantir que qualquer mudança em memória não se perca.
+        try:
+            from services.local_project_service import LocalProjectService
+
+            saved = LocalProjectService(app_name=self.app_name).save_project(self.current_project)
+            self.current_project = self._normalize_project_paths(saved)
+        except Exception as e:
+            QMessageBox.warning(self, "Salvar Projeto", f"Falha ao salvar project.json:\n\n{e}")
 
         errors: list[str] = []
         for path, tab in list(self._open_files.items()):

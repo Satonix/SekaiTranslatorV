@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
 from views.translation_table_view import TranslationTableView
 from models.translation_table_model import TranslationTableModel
 from views.editor_panel import EditorPanel
-
 from models.undo_stack import UndoStack, UndoAction, UndoItem
 from models import project_state_store
 from services.encoding_service import EncodingService
@@ -60,6 +59,7 @@ class FileTab(QWidget):
         self.table = TranslationTableView(self)
         self.model = TranslationTableModel([])
         self.table.setModel(self.model)
+        # Ensure status background colors remain visible even when selected.
         try:
             self.table.doubleClicked.connect(self._on_table_double_clicked)
         except Exception:
@@ -364,6 +364,19 @@ class FileTab(QWidget):
         self.had_bom = bool(getattr(st, "had_bom", False) or self.had_bom)
 
         saved = st.entries
+        def _norm_status(v: object) -> str:
+            s = v if isinstance(v, str) else ''
+            s = s.strip().lower().replace(' ', '_')
+            if s in ('untranslated', 'not_translated', 'untranslated.'):
+                return 'untranslated'
+            if s in ('inprogress', 'in_progress'):
+                return 'in_progress'
+            if s in ('translated', 'done'):
+                return 'translated'
+            if s in ('reviewed', 'approved'):
+                return 'reviewed'
+            return s or 'untranslated'
+
 
         by_id: dict[str, dict] = {}
         for e in saved:
@@ -379,11 +392,11 @@ class FileTab(QWidget):
                     if "translation" in s:
                         cur["translation"] = s.get("translation") or ""
                     if "status" in s:
-                        cur["status"] = s.get("status") or "untranslated"
+                        cur["status"] = _norm_status(s.get("status"))
         elif len(saved) == len(self._entries):
             for cur, s in zip(self._entries, saved):
                 cur["translation"] = s.get("translation") or ""
-                cur["status"] = s.get("status") or "untranslated"
+                cur["status"] = _norm_status(s.get("status"))
 
         self.model.set_entries(self._entries)
         self._undo.clear()

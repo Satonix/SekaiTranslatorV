@@ -81,7 +81,6 @@ class ExportOpsMixin:
             decoded = EncodingService.decode_bytes(raw, chosen, errors="replace")
             text = decoded.text or ""
 
-            parser = select_parser(self.current_project, tab.file_path, text)
             ctx = ParseContext(
                 file_path=tab.file_path,
                 project=self.current_project,
@@ -89,6 +88,8 @@ class ExportOpsMixin:
                 encoding=chosen,
                 options={"newline_style": decoded.newline_style, "had_bom": decoded.had_bom},
             )
+            parser_id = (self.current_project.get("parser_id") or "").strip() or None
+            parser = select_parser(ctx, text, parser_id=parser_id, allow_autodetect=True, raise_on_fail=True)
             tab.parser = parser
             tab.parse_ctx = ctx
 
@@ -189,7 +190,6 @@ class ExportOpsMixin:
                     decoded = EncodingService.decode_bytes(raw, chosen, errors="replace")
                     text = decoded.text or ""
 
-                    parser = select_parser(self.current_project, src_path, text)
 
                     try:
                         ctx = ParseContext(
@@ -201,6 +201,9 @@ class ExportOpsMixin:
                         )
                     except TypeError:
                         ctx = ParseContext(file_path=src_path, project=self.current_project)
+
+                    parser_id = (self.current_project.get("parser_id") or "").strip() or None
+                    parser = select_parser(ctx, text, parser_id=parser_id, allow_autodetect=True, raise_on_fail=True)
 
                     entries = parser.parse(ctx, text)
 

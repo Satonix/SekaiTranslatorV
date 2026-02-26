@@ -21,11 +21,11 @@ class TranslationTableView(QTableView):
         self.setWordWrap(False)
         self.setShowGrid(False)
 
-        self.setStyleSheet("""
-            QTableView {
-                outline: 0;
-            }
-        """)
+        # NOTE:
+        # Em alguns estilos (principalmente no Windows com scaling fracionário),
+        # selecionar várias linhas pode aparentar um "vão"/linha em branco entre
+        # as linhas selecionadas. Isso costuma vir de borda/padding padrão.
+        # Forçamos itens sem borda/padding para a seleção ficar "contínua".
 
         self.verticalHeader().setVisible(False)
         self.verticalHeader().setDefaultSectionSize(26)

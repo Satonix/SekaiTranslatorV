@@ -448,6 +448,9 @@ class ToolsMixin:
 
         items: list[dict] = []
         preview_rows: list[dict] = []
+        # id -> original (fallback quando o proxy não retornar tradução para algum item)
+        orig_by_id: dict[str, str] = {}
+
         for r in source_rows:
             e = entries[r] if 0 <= r < len(entries) else None
             if not isinstance(e, dict):
@@ -455,7 +458,13 @@ class ToolsMixin:
             original = (e.get("original") or "").strip()
             if not original:
                 continue
-            item_id = str(e.get("entry_id") or e.get("id") or r)
+            item_id_val = e.get("entry_id")
+            if item_id_val is None or item_id_val == "":
+                item_id_val = e.get("id")
+            if item_id_val is None or item_id_val == "":
+                item_id_val = r
+            item_id = str(item_id_val).strip()
+            orig_by_id[item_id] = original
             items.append({"id": item_id, "text": original})
             preview_rows.append({"row": r, "original": original, "translation": ""})
 
@@ -550,10 +559,42 @@ class ToolsMixin:
             for r in results:
                 if not isinstance(r, dict):
                     continue
-                rid = str(r.get("id") or "")
+                rid_val = r.get("id")
+                if rid_val is None or rid_val == "":
+                    continue
+                rid = str(rid_val).strip()
                 tr = r.get("translation")
-                if rid and isinstance(tr, str):
-                    by_id[rid] = tr
+                if not (rid and isinstance(tr, str)):
+                    continue
+                # Normaliza e ignora respostas vazias (evita inserir linhas em branco)
+                tr2 = tr.strip("\r\n")
+                
+                if tr2.strip() == "":
+                    continue
+                by_id[rid] = tr2
+
+            # Fallback: se o proxy não devolver tradução para algum item,
+            # use o texto original como placeholder (evita linhas vazias no editor).
+            missing: list[str] = []
+            try:
+                for _id, _orig in (orig_by_id or {}).items():
+                    if _id not in by_id:
+                        if isinstance(_orig, str) and _orig.strip():
+                            by_id[_id] = _orig
+                            missing.append(_id)
+            except Exception:
+                missing = []
+
+            if missing:
+                try:
+                    QMessageBox.information(
+                        self,
+                        "IA",
+                        f"{len(missing)} linha(s) não retornaram tradução. "
+                        "Mantive o texto original como placeholder para não ficar em branco.",
+                    )
+                except Exception:
+                    pass
 
             # preencher preview_rows
             for pr in preview_rows:
