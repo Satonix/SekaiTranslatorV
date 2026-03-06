@@ -1,45 +1,17 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
-import json
-import copy
-import re
-import time
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import Qt, QSettings, QThread, QTimer, QObject, Signal
-from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QSplitter,
-    QTreeView,
-    QTabWidget,
-    QVBoxLayout,
-    QLabel,
-    QFileSystemModel,
-    QMessageBox,
-    QApplication,
-    QCheckBox,
-)
+from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtWidgets import QApplication, QMessageBox
 
-from views.file_tab import FileTab
+from services.update_service import GitHubReleaseUpdater
+from views.dialogs.progress_dialog import ProgressDialog
 
 if TYPE_CHECKING:
     from views.dialogs.search_dialog import SearchResult
 else:
     SearchResult = Any
-
-from services.search_replace_service import SearchReplaceService
-from services.update_service import GitHubReleaseUpdater
-from services.encoding_service import EncodingService
-from services import sync_service
-from views.dialogs.translation_preview_dialog import TranslationPreviewDialog
-
-from parsers.autodetect import select_parser
-from parsers.manager import get_parser_manager
-from parsers.base import ParseContext
 
 
 class _UpdateWorker(QObject):
@@ -53,44 +25,48 @@ class _UpdateWorker(QObject):
         self._info = info
         self._cancel = False
 
-    def cancel(self):
+    def cancel(self) -> None:
         self._cancel = True
 
-    def run(self):
+    def run(self) -> None:
         try:
-            def _progress(done: int, total: int):
-                if total <= 0:
-                    return
-                p = int((done * 100) / total)
-                if p < 0:
-                    p = 0
-                elif p > 100:
-                    p = 100
-                self.progress.emit(p)
+            def _progress(pct):
+                try:
+                    pct = int(pct)
+                except Exception:
+                    pct = 0
+
+                if pct < 0:
+                    pct = 0
+                elif pct > 100:
+                    pct = 100
+
+                self.progress.emit(pct)
 
             self._svc.download_and_install(
                 self._info,
                 progress_cb=_progress,
                 cancel_cb=lambda: self._cancel,
             )
+
+            if self._cancel:
+                self.failed.emit("Atualização cancelada pelo usuário.")
+                return
+
             self.finished.emit()
+
         except Exception as e:
             self.failed.emit(str(e))
 
 
 class UpdatesMixin:
     def _auto_check_updates(self):
-        """
-        Checa updates automaticamente no início, mas sempre pergunta antes de instalar.
-        Nunca deve quebrar o app.
-        """
         try:
             info = self.update_service.fetch_latest()
             if not info:
                 return
 
             notes = (info.notes or "").strip()
-
             details = (
                 f"Nova versão disponível: {info.version}\n"
                 f"Você está usando: {self.app_version}\n\n"
@@ -107,43 +83,31 @@ class UpdatesMixin:
                 QMessageBox.Yes,
             )
 
-            if res != QMessageBox.Yes:
-                return
-
-            self._start_update_install(info)
-            return
+            if res == QMessageBox.Yes:
+                self._start_update_install(info)
 
         except Exception:
             return
 
-
     def _check_updates_now(self):
-        """
-        Checagem manual via menu Ajuda -> Verificar atualizações...
-        """
         try:
             info = self.update_service.fetch_latest()
             if not info:
                 QMessageBox.information(
                     self,
                     "Atualizações",
-                    "Você já está na versão mais recente."
+                    "Você já está na versão mais recente.",
                 )
                 return
 
             notes = (info.notes or "").strip()
-
             details = (
                 f"Nova versão disponível: {info.version}\n"
                 f"Você está usando: {self.app_version}\n\n"
             )
 
             if notes:
-                details += (
-                    notes[:2000] +
-                    ("..." if len(notes) > 2000 else "") +
-                    "\n\n"
-                )
+                details += notes[:2000] + ("..." if len(notes) > 2000 else "") + "\n\n"
 
             res = QMessageBox.question(
                 self,
@@ -153,63 +117,90 @@ class UpdatesMixin:
                 QMessageBox.Yes,
             )
 
-            if res != QMessageBox.Yes:
-                return
-
-            self._start_update_install(info)
-            return
+            if res == QMessageBox.Yes:
+                self._start_update_install(info)
 
         except Exception as e:
             QMessageBox.critical(
                 self,
                 "Erro ao verificar atualizações",
-                str(e)
+                str(e),
             )
-
 
     def _start_update_install(self, info) -> None:
         if not getattr(self, "update_service", None):
-            QMessageBox.critical(self, "Atualizações", "Update service não inicializado.")
+            QMessageBox.critical(
+                self,
+                "Atualizações",
+                "Serviço de atualização não inicializado.",
+            )
             return
 
-        dlg = ProgressDialog(self, title="Atualização", message="Baixando atualização...", show_cancel=True)
-        dlg.set_range(0, 100)
-        dlg.set_value(0)
+        dlg = ProgressDialog(
+            title="Atualização",
+            message="Baixando atualização...",
+            parent=self,
+            cancellable=True,
+        )
+        dlg.set_total(100)
+        dlg.set_progress(0)
         dlg.show()
 
         worker = _UpdateWorker(self.update_service, info)
-        th = QThread(self)
-        worker.moveToThread(th)
+        thread = QThread(self)
+        worker.moveToThread(thread)
 
         dlg.canceled.connect(worker.cancel)
-        worker.progress.connect(dlg.set_value)
+        worker.progress.connect(dlg.set_progress)
 
-        def _fail(msg: str):
+        def _cleanup():
+            try:
+                thread.quit()
+            except Exception:
+                pass
+            try:
+                thread.wait(2000)
+            except Exception:
+                pass
+            try:
+                worker.deleteLater()
+            except Exception:
+                pass
+            try:
+                thread.deleteLater()
+            except Exception:
+                pass
+
+        def _on_failed(msg: str):
             try:
                 dlg.close()
             except Exception:
                 pass
-            QMessageBox.critical(self, "Erro ao atualizar", msg)
-            try:
-                th.quit()
-                th.wait(2000)
-            except Exception:
-                pass
 
-        def _done():
+            _cleanup()
+
+            QMessageBox.critical(
+                self,
+                "Erro ao atualizar",
+                msg,
+            )
+
+        def _on_finished():
             try:
                 dlg.close()
             except Exception:
                 pass
-            try:
-                th.quit()
-            except Exception:
-                pass
+
+            _cleanup()
+
+            QMessageBox.information(
+                self,
+                "Atualização",
+                "O instalador foi iniciado. O aplicativo será fechado para concluir a atualização.",
+            )
             QApplication.quit()
 
-        worker.failed.connect(_fail)
-        worker.finished.connect(_done)
-        th.started.connect(worker.run)
-        th.start()
-
-
+        worker.failed.connect(_on_failed)
+        worker.finished.connect(_on_finished)
+        thread.started.connect(worker.run)
+        thread.start()

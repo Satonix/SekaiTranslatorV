@@ -86,7 +86,7 @@ class GitHubReleaseUpdater:
             elif name.endswith(".sha256"):
                 sha = url
 
-        if not installer or not sha:
+        if not installer:
             return None
 
         return UpdateInfo(

@@ -106,10 +106,16 @@ def open_file(main_window: Any, index: QModelIndex) -> None:
             encoding=chosen,
             options={"newline_style": decoded.newline_style, "had_bom": decoded.had_bom},
         )
-        parser = select_parser(ctx, text, raise_on_fail=True)
 
-        # Compat: parsers antigos retornam diretamente uma lista de Entry.
-        # Parsers novos podem retornar ParseResult(engine_id, entries=[...]).
+        parser_id = (project.get("parser_id") or "").strip() or None
+        parser = select_parser(
+            ctx,
+            text,
+            parser_id=parser_id,
+            allow_autodetect=True,
+            raise_on_fail=True,
+        )
+
         parse_res = parser.parse(ctx, text)
         if isinstance(parse_res, list):
             entries = parse_res
