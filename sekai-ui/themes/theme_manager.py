@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict
 
@@ -59,11 +60,57 @@ class ThemeManager:
 
     @classmethod
     def themes_dir(cls) -> Path:
-        source_dir = Path(__file__).resolve().parent
+        cls.ensure_builtin_themes_synced()
+        return ThemeStorage.builtin_themes_dir()
+
+    @classmethod
+    def ensure_builtin_themes_synced(cls) -> Path:
+        source_dir = cls._find_builtin_source_dir()
+        if source_dir is None:
+            return ThemeStorage.builtin_themes_dir()
         try:
             return ThemeStorage.sync_builtin_themes(source_dir)
         except Exception:
-            return source_dir
+            return ThemeStorage.builtin_themes_dir()
+
+    @classmethod
+    def _find_builtin_source_dir(cls) -> Path | None:
+        checked: list[Path] = []
+
+        def add(path: Path | None) -> None:
+            if path is None:
+                return
+            try:
+                resolved = path.resolve()
+            except Exception:
+                resolved = path
+            if resolved not in checked:
+                checked.append(resolved)
+
+        module_dir = Path(__file__).resolve().parent
+        add(module_dir)
+
+        if getattr(sys, 'frozen', False):
+            exe_dir = Path(sys.executable).resolve().parent
+            add(exe_dir / 'themes')
+            add(exe_dir / '_internals' / 'themes')
+            add(exe_dir / '_internal' / 'themes')
+            meipass = getattr(sys, '_MEIPASS', None)
+            if meipass:
+                base = Path(meipass)
+                add(base / 'themes')
+                add(base / '_internals' / 'themes')
+                add(base / '_internal' / 'themes')
+
+        for parent in module_dir.parents:
+            add(parent / 'themes')
+            add(parent / '_internals' / 'themes')
+            add(parent / '_internal' / 'themes')
+
+        for candidate in checked:
+            if candidate.is_dir() and any(candidate.glob('*.qss')) and any(candidate.glob('*.json')):
+                return candidate
+        return None
 
     @classmethod
     def builtin_display_names(cls) -> list[str]:
@@ -344,6 +391,7 @@ class ThemeManager:
         cls._qss_cache.clear()
         cls._tokens_cache.clear()
         cls._overlay_cache.clear()
+        cls.ensure_builtin_themes_synced()
 
     @classmethod
     def _custom_themes(cls) -> dict[str, ThemeSpec]:
