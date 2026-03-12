@@ -37,6 +37,8 @@ DisableProgramGroupPage=yes
 
 [Files]
 Source: "release\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "sekai-ui\themes\*"; DestDir: "{app}\themes"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "sekai-ui\assets\*"; DestDir: "{app}\assets"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\SekaiTranslatorV"; Filename: "{app}\{#MyAppExeName}"
