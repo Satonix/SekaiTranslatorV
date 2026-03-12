@@ -6,14 +6,11 @@
 #define MyAppPublisher "Satonix"
 #define MyAppExeName "SekaiTranslatorV.exe"
 
-; Se o CI passar /DAPP_VER=0.1.2 usa essa versão.
-; Se não passar (build manual), usa fallback.
 #if Defined(APP_VER)
   #define MyAppVersion APP_VER
 #else
   #define MyAppVersion "0.1.0"
 #endif
-
 
 [Setup]
 AppId={{A9E6C8C9-0D6C-4E4F-9F8B-2B9B9C5D8B11}}
@@ -38,20 +35,15 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 DisableDirPage=no
 DisableProgramGroupPage=yes
 
-
 [Files]
-; Copia tudo da pasta release (gerada pelo CI ou build local)
-Source: "release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
-
+Source: "release\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\SekaiTranslatorV"; Filename: "{app}\{#MyAppExeName}"
 Name: "{commondesktop}\SekaiTranslatorV"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
-
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na Área de Trabalho"; Flags: unchecked
-
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Executar SekaiTranslatorV"; Flags: nowait postinstall skipifsilent

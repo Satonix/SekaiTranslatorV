@@ -59,7 +59,11 @@ class ThemeManager:
 
     @classmethod
     def themes_dir(cls) -> Path:
-        return Path(__file__).resolve().parent
+        source_dir = Path(__file__).resolve().parent
+        try:
+            return ThemeStorage.sync_builtin_themes(source_dir)
+        except Exception:
+            return source_dir
 
     @classmethod
     def builtin_display_names(cls) -> list[str]:
@@ -337,6 +341,9 @@ class ThemeManager:
     @classmethod
     def refresh_custom_themes(cls) -> None:
         cls._custom_themes_cache = None
+        cls._qss_cache.clear()
+        cls._tokens_cache.clear()
+        cls._overlay_cache.clear()
 
     @classmethod
     def _custom_themes(cls) -> dict[str, ThemeSpec]:
@@ -345,7 +352,7 @@ class ThemeManager:
         result: dict[str, ThemeSpec] = {}
         try:
             for path in ThemeStorage.themes_dir().iterdir():
-                if not path.is_dir():
+                if not path.is_dir() or path.name == ThemeStorage.BUILTIN_DIR_NAME:
                     continue
                 try:
                     manifest = json.loads((path / 'manifest.json').read_text(encoding='utf-8'))

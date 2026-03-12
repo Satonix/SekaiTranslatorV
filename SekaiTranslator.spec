@@ -1,5 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all, Tree
+from pathlib import Path
+from PyInstaller.utils.hooks import collect_all
+
+project_root = Path('.').resolve()
+ui_root = project_root / 'sekai-ui'
+core_root = project_root / 'sekai-core' / 'py' / 'src'
 
 datas = []
 binaries = []
@@ -10,13 +15,20 @@ datas += tmp_ret[0]
 binaries += tmp_ret[1]
 hiddenimports += tmp_ret[2]
 
-# Recursos do app
-datas += Tree('sekai-ui\\themes', prefix='themes')
-datas += Tree('sekai-ui\\assets', prefix='assets')
+def collect_tree(src: Path, dest: str):
+    items = []
+    if src.exists():
+        for p in src.rglob('*'):
+            if p.is_file():
+                items.append((str(p), str(Path(dest) / p.relative_to(src).parent)))
+    return items
+
+datas += collect_tree(ui_root / 'themes', 'themes')
+datas += collect_tree(ui_root / 'assets', 'assets')
 
 a = Analysis(
-    ['sekai-ui\\main.py'],
-    pathex=['.\\sekai-ui', '.\\sekai-core\\py\\src'],
+    [str(ui_root / 'main.py')],
+    pathex=[str(ui_root), str(core_root)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -33,21 +45,24 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
-    name='SekaiTranslator',
+    exclude_binaries=True,
+    name='SekaiTranslatorV',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=['sekai-ui\\assets\\app_icon.ico'],
+    icon=str(ui_root / 'assets' / 'app_icon.ico'),
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='SekaiTranslatorV',
 )

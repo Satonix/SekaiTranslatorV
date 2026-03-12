@@ -13,6 +13,7 @@ from typing import Any
 class ThemeStorage:
     APP_DIR_NAME = 'SekaiTranslatorV'
     THEMES_DIR_NAME = 'themes'
+    BUILTIN_DIR_NAME = '_builtin'
 
     @classmethod
     def base_dir(cls) -> Path:
@@ -28,6 +29,45 @@ class ThemeStorage:
         return path
 
     @classmethod
+    def builtin_themes_dir(cls) -> Path:
+        path = cls.themes_dir() / cls.BUILTIN_DIR_NAME
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @classmethod
+    def sync_builtin_themes(cls, source_dir: Path) -> Path:
+        src = Path(source_dir)
+        dest = cls.builtin_themes_dir()
+        if not src.is_dir():
+            return dest
+        for path in src.iterdir():
+            if not path.is_file():
+                continue
+            target = dest / path.name
+            try:
+                needs_copy = (not target.exists()) or (path.stat().st_mtime > target.stat().st_mtime) or (path.stat().st_size != target.stat().st_size)
+            except Exception:
+                needs_copy = True
+            if needs_copy:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, target)
+        return dest
+
+    @classmethod
+    def builtin_file_path(cls, filename: str, source_dir: Path | None = None) -> Path:
+        if source_dir is not None:
+            cls.sync_builtin_themes(source_dir)
+        name = Path(filename).name
+        dest = cls.builtin_themes_dir() / name
+        if dest.exists():
+            return dest
+        if source_dir is not None:
+            src = Path(source_dir) / name
+            if src.exists():
+                return src
+        return dest
+
+    @classmethod
     def slugify(cls, value: str) -> str:
         raw = re.sub(r'[^a-zA-Z0-9_-]+', '_', (value or '').strip().lower())
         raw = re.sub(r'_+', '_', raw).strip('_')
@@ -39,7 +79,7 @@ class ThemeStorage:
         base = cls.slugify(base_name)
         candidate = base
         index = 2
-        while (root / candidate).exists():
+        while (root / candidate).exists() or candidate == cls.BUILTIN_DIR_NAME:
             candidate = f'{base}_{index}'
             index += 1
         return candidate
