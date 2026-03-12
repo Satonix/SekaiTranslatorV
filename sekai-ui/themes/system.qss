@@ -1,0 +1,145 @@
+QWidget {
+    font-size: 10pt;
+}
+
+QLabel[sectionLabel="true"],
+QLabel#sectionHeader,
+QLabel[titleLabel="true"] {
+    font-weight: 700;
+}
+
+QLabel[mutedText="true"] {
+    color: palette(mid);
+}
+
+QWidget#projectTreePanel,
+QTabWidget#mainTabs,
+QGroupBox {
+    border: 1px solid palette(mid);
+}
+
+QTreeView,
+QTableView,
+QPlainTextEdit,
+QTextEdit,
+QListWidget,
+QTabWidget::pane,
+QAbstractScrollArea,
+QFrame {
+    border: 0px;
+}
+
+QLineEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox,
+QPushButton {
+    border: 1px solid palette(mid);
+}
+
+QMenu {
+    background-color: palette(window);
+    color: palette(window-text);
+    border: 1px solid palette(mid);
+}
+
+QMenu::item {
+    background-color: palette(window);
+    color: palette(window-text);
+    padding: 6px 10px;
+}
+
+QMenu::item:selected {
+    background-color: palette(light);
+    color: palette(window-text);
+}
+
+QHeaderView::section {
+    border-right: 1px solid palette(mid);
+    border-bottom: 1px solid palette(mid);
+    padding: 6px 8px;
+    font-weight: 600;
+}
+
+QTabWidget::pane {
+    margin-top: -1px;
+}
+
+QTabBar::tab {
+    padding: 6px 10px;
+    margin-right: 2px;
+}
+
+QWidget#editorPanel {
+    background-color: transparent;
+}
+
+QWidget#originalSection,
+QWidget#translationSection {
+    border: 0px;
+}
+
+QLabel#originalSectionLabel,
+QLabel#translationSectionLabel {
+    padding: 4px 8px;
+    border-bottom: 1px solid palette(mid);
+    font-weight: 700;
+}
+
+QWidget#originalEditorSurface,
+QWidget#translationEditorSurface,
+QPlainTextEdit#originalEditor,
+QPlainTextEdit#translationEditor {
+    border: 0px;
+}
+
+QPlainTextEdit#originalEditor,
+QPlainTextEdit#translationEditor {
+    padding: 0px 6px 0px 6px;
+}
+
+QSplitter#editorSplitter::handle:vertical {
+    background-color: transparent;
+    height: 10px;
+    margin: 0 4px;
+    border-top: 1px solid palette(mid);
+}
+
+
+QWidget#originalEditorGutter,
+QWidget#translationEditorGutter {
+    background-color: palette(alternate-base);
+    border-right: 1px solid palette(mid);
+}
+
+QWidget#originalEditorGutter,
+QWidget#translationEditorGutter,
+QWidget#originalEditorGutter QLabel,
+QWidget#translationEditorGutter QLabel {
+    color: palette(mid);
+}
+
+
+QTabBar QToolButton,
+QTabWidget QToolButton {
+    background: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(mid);
+    padding: 4px 8px;
+}
+
+QTabBar QToolButton:hover,
+QTabWidget QToolButton:hover {
+    background: palette(light);
+}
+
+QTabBar QToolButton:pressed,
+QTabWidget QToolButton:pressed,
+QTabBar QToolButton:checked,
+QTabWidget QToolButton:checked {
+    background: palette(midlight);
+}
+
+QTabBar::scroller {
+    background: transparent;
+}

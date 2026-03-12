@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
@@ -16,9 +17,14 @@ class EditorWithGutter(QWidget):
 
     def __init__(self, editor_widget: QPlainTextEdit, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WA_StyledBackground, True)
 
         self.editor = editor_widget
+        self.editor.setAttribute(Qt.WA_StyledBackground, True)
         self.gutter = EditorGutter(self.editor, self)
+
+        editor_name = self.editor.objectName() or "editor"
+        self.gutter.setObjectName(f"{editor_name}Gutter")
 
         self.gutter.setVisible(True)
         self.gutter.setFixedWidth(120)
@@ -37,6 +43,18 @@ class EditorWithGutter(QWidget):
 
         self.editor.setFrameStyle(QPlainTextEdit.NoFrame)
         self.editor.setViewportMargins(0, 0, 0, 0)
+
+        try:
+            self.editor.viewport().setProperty("sekaiOverlayViewport", True)
+            self.editor.viewport().setAttribute(Qt.WA_StyledBackground, True)
+            self.editor.viewport().setAutoFillBackground(False)
+        except Exception:
+            pass
+
+        try:
+            self.gutter.setProperty("sekaiOverlayInner", True)
+        except Exception:
+            pass
 
         self.editor.blockCountChanged.connect(
             self.gutter.update_width

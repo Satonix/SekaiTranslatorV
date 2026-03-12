@@ -139,7 +139,7 @@ class SearchDialog(QDialog):
         root.addWidget(self.results, 1)
 
         hint = QLabel("Dica: duplo-clique em um resultado para abrir e selecionar a linha.")
-        hint.setStyleSheet("color: #999;")
+        hint.setProperty("mutedText", True)
         root.addWidget(hint)
 
         bottom = QHBoxLayout()

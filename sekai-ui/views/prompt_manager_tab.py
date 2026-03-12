@@ -14,6 +14,7 @@ class PromptManagerTab(QWidget):
 
         title = QLabel("Prompts / IA")
         title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        title.setProperty("titleLabel", True)
 
         hint = QLabel(
             "Gerencie prompts e comportamento da IA.\n\n"

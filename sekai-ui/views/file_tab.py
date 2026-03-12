@@ -32,6 +32,8 @@ class FileTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("fileTabSurface")
+        self.setAttribute(Qt.WA_StyledBackground, True)
 
         self.file_path: str | None = None
         self.parser = None
@@ -54,9 +56,13 @@ class FileTab(QWidget):
         layout.setSpacing(4)
 
         splitter = QSplitter(Qt.Vertical)
+        splitter.setObjectName("fileTabSplitter")
+        splitter.setAttribute(Qt.WA_StyledBackground, True)
         layout.addWidget(splitter)
 
         self.table = TranslationTableView(self)
+        self.table.setObjectName("translationTableView")
+        self.table.setAttribute(Qt.WA_StyledBackground, True)
         self.model = TranslationTableModel([])
         self.table.setModel(self.model)
         # Ensure status background colors remain visible even when selected.
@@ -67,6 +73,7 @@ class FileTab(QWidget):
         splitter.addWidget(self.table)
 
         self.editor = EditorPanel(self)
+        self.editor.setAttribute(Qt.WA_StyledBackground, True)
         self.editor.bind_file_tab(self)
         splitter.addWidget(self.editor)
 
@@ -99,17 +106,18 @@ class FileTab(QWidget):
         return None
 
     def _visible_row_from_source_row(self, source_row: int) -> int | None:
-        """Map SOURCE row (self._entries) -> visible row (self.model.entries).
-
-        The table only shows translatable entries (model.entries). A source row
-        may point to a non-visible entry (e.g. non-translatable/header rows).
-        In that case, we try:
-        1) direct dict identity lookup
-        2) entry_id lookup
-        3) nearest visible row (forward, then backward)
-        """
         if not (0 <= source_row < len(self._entries)):
             return None
+
+        try:
+            mapping = getattr(self.model, "_visible_to_source_row", None) or []
+            if mapping:
+                try:
+                    return mapping.index(source_row)
+                except ValueError:
+                    pass
+        except Exception:
+            pass
 
         e = self._entries[source_row]
 
@@ -150,34 +158,37 @@ class FileTab(QWidget):
         return None
 
     def set_entries(self, entries: list[dict]):
-        self._entries = entries or []
+        self.setUpdatesEnabled(False)
+        try:
+            self._entries = entries or []
+            self.model.set_entries(self._entries)
 
-        self.model.set_entries(self._entries)
+            sm = self.table.selectionModel()
+            if sm and not self._selection_connected:
+                sm.selectionChanged.connect(self._on_selection_changed)
+                self._selection_connected = True
 
-        sm = self.table.selectionModel()
-        if sm and not self._selection_connected:
-            sm.selectionChanged.connect(self._on_selection_changed)
-            self._selection_connected = True
+            self._undo.clear()
+            self.set_dirty(False)
 
-        self._undo.clear()
-        self.set_dirty(False)
+            if self.model.rowCount() > 0:
+                self.table.selectRow(0)
 
-        if self.model.rowCount() > 0:
-            self.table.selectRow(0)
-
-        if self.model.rowCount() > 0 and (self._pending_select_entry_id is not None or self._pending_select_source_row is not None):
-            eid = self._pending_select_entry_id
-            sr = self._pending_select_source_row
-            self._pending_select_entry_id = None
-            self._pending_select_source_row = None
-            try:
-                if eid:
-                    self.select_entry(eid, fallback_row=sr)
-                elif isinstance(sr, int):
-                    self.select_source_row(sr)
-            except Exception:
-                pass
-
+            if self.model.rowCount() > 0 and (self._pending_select_entry_id is not None or self._pending_select_source_row is not None):
+                eid = self._pending_select_entry_id
+                sr = self._pending_select_source_row
+                self._pending_select_entry_id = None
+                self._pending_select_source_row = None
+                try:
+                    if eid:
+                        self.select_entry(eid, fallback_row=sr)
+                    elif isinstance(sr, int):
+                        self.select_source_row(sr)
+                except Exception:
+                    pass
+        finally:
+            self.setUpdatesEnabled(True)
+            self.update()
 
     def _on_selection_changed(self, *_):
         rows_visible = self._visible_rows()

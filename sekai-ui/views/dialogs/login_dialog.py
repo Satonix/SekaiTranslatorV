@@ -48,6 +48,7 @@ class LoginDialog(QDialog):
 
         title = QLabel("Conta Sekai")
         title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title.setProperty("titleLabel", True)
         layout.addWidget(title)
 
         self.user_edit = QLineEdit()

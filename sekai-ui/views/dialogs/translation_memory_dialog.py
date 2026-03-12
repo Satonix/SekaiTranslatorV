@@ -27,13 +27,14 @@ class TranslationMemoryDialog(QDialog):
 
         title = QLabel("Memória de Tradução")
         title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title.setProperty("titleLabel", True)
         layout.addWidget(title)
 
         info = QLabel(
             "Correspondências de tradução armazenadas.\n"
             "(Exato / Similar — futuro)"
         )
-        info.setStyleSheet("color: #777;")
+        info.setProperty("mutedText", True)
         layout.addWidget(info)
 
         self.memory_list = QListWidget()

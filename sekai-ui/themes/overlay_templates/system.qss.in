@@ -1,0 +1,82 @@
+QWidget#mainBackgroundHost,
+QSplitter,
+QSplitter::handle,
+QWidget#fileTabSurface,
+QWidget#editorPanel,
+QWidget#originalEditorSurface,
+QWidget#translationEditorSurface,
+QTabWidget#mainTabs,
+QTabWidget#mainTabs::pane,
+QStackedWidget,
+QStackedWidget > QWidget,
+QFrame {
+    background: transparent;
+}
+
+QWidget#projectTreePanel,
+QWidget#fileTabSurface,
+QWidget#editorPanel,
+QWidget#originalSection,
+QWidget#translationSection,
+QWidget#originalEditorSurface,
+QWidget#translationEditorSurface,
+QTabWidget#mainTabs,
+QTabWidget#mainTabs::pane,
+QStackedWidget,
+QStackedWidget > QWidget,
+QFrame,
+QGroupBox {
+    background-color: rgba(236, 240, 246, {{PANEL_ALPHA}});
+    border-color: rgba(130, 142, 160, {{BORDER_ALPHA}});
+}
+
+QAbstractScrollArea,
+QTableView,
+QPlainTextEdit#originalEditor,
+QPlainTextEdit#translationEditor,
+QListView,
+QTextEdit {
+    background: transparent;
+    border-color: rgba(130, 142, 160, {{BORDER_ALPHA}});
+}
+
+QTableView {
+    alternate-background-color: rgba(225, 231, 239, {{ALT_ROW_ALPHA}});
+}
+
+QTreeView,
+QWidget#originalEditorGutter,
+QWidget#translationEditorGutter,
+QHeaderView,
+QHeaderView::section,
+QWidget[sekaiOverlayViewport="true"],
+QWidget[sekaiOverlayInner="true"] {
+    background-color: rgba(242, 246, 252, {{VIEWPORT_ALPHA}});
+    border-color: rgba(130, 142, 160, {{BORDER_ALPHA}});
+}
+
+QTabBar::tab {
+    background-color: rgba(237, 242, 248, {{TAB_ALPHA}});
+    border-color: rgba(130, 142, 160, {{BORDER_STRONG_ALPHA}});
+}
+
+QTabBar::tab:selected {
+    background-color: rgba(250, 252, 255, {{TAB_SELECTED_ALPHA}});
+    border-color: rgba(72, 125, 209, {{BORDER_FOCUS_ALPHA}});
+}
+
+QLineEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox,
+QPushButton,
+QToolButton {
+    background-color: rgba(250, 252, 255, {{INPUT_ALPHA}});
+    border-color: rgba(130, 142, 160, {{BORDER_STRONG_ALPHA}});
+}
+
+QMenuBar,
+QMenu,
+QStatusBar {
+    background-color: rgba(244, 247, 252, {{MENU_ALPHA}});
+}

@@ -52,7 +52,14 @@ class ToolsMixin:
 
     def _open_preferences(self):
         from views.dialogs.preferences_dialog import PreferencesDialog
-        PreferencesDialog(self).exec()
+
+        dlg = PreferencesDialog(self)
+        dlg.exec()
+
+        try:
+            self._apply_saved_theme()
+        except Exception:
+            pass
 
     def _open_search(self):
         """Abre o diálogo de busca (Ctrl+F)."""

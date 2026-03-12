@@ -29,6 +29,7 @@ class QADialog(QDialog):
 
         title = QLabel("Verificação de Qualidade (QA)")
         title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title.setProperty("titleLabel", True)
         layout.addWidget(title)
 
         scope_box = QGroupBox("Escopo")

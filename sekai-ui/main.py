@@ -13,37 +13,12 @@ except Exception:
     APP_VERSION = "0.0.0"
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtGui import QPalette, QColor
-from PySide6.QtCore import Qt
 
 from core_client import SekaiCoreClient
+from themes.theme_manager import ThemeManager
 from views.main_window import MainWindow
 
 
-def apply_dark_theme(app: QApplication):
-    """
-    Tema escuro suave, baseado no SekaiTranslator original.
-    Usa QPalette + Fusion.
-    """
-    app.setStyle("Fusion")
-
-    palette = QPalette()
-
-    palette.setColor(QPalette.Window, QColor(30, 30, 30))
-    palette.setColor(QPalette.WindowText, Qt.white)
-
-    palette.setColor(QPalette.Base, QColor(24, 24, 24))
-    palette.setColor(QPalette.AlternateBase, QColor(36, 36, 36))
-
-    palette.setColor(QPalette.Text, Qt.white)
-
-    palette.setColor(QPalette.Button, QColor(45, 45, 45))
-    palette.setColor(QPalette.ButtonText, Qt.white)
-
-    palette.setColor(QPalette.Highlight, QColor(60, 120, 200))
-    palette.setColor(QPalette.HighlightedText, Qt.white)
-
-    app.setPalette(palette)
 
 
 def _show_fatal(title: str, message: str):
@@ -96,7 +71,7 @@ def find_core_exe() -> str:
 
 def main():
     app = QApplication(sys.argv)
-    apply_dark_theme(app)
+    ThemeManager.apply_saved_theme(app, APP_NAME)
 
     core_path = find_core_exe()
 

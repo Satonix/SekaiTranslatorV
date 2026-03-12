@@ -14,6 +14,7 @@ class PluginsTab(QWidget):
 
         title = QLabel("Plugins")
         title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        title.setProperty("titleLabel", True)
 
         hint = QLabel(
             "Gerencie plugins do SekaiTranslator.\n\n"

@@ -130,7 +130,7 @@ class TranslationPreviewDialog(QDialog):
             "Clique em <b>Aplicar</b> para confirmar, ou <b>Cancelar</b> para descartar."
         )
         sub.setWordWrap(True)
-        sub.setStyleSheet("color: #a0a0a0;")
+        sub.setProperty("mutedText", True)
         main.addWidget(sub)
 
         table_wrap = QWidget()

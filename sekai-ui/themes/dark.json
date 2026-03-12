@@ -1,0 +1,45 @@
+{
+  "status": {
+    "untranslated": null,
+    "in_progress": [
+      116,
+      120,
+      18,
+      255
+    ],
+    "translated": [
+      42,
+      79,
+      49,
+      255
+    ],
+    "reviewed": [
+      140,
+      110,
+      180,
+      255
+    ]
+  },
+  "status_overlay": {
+    "alpha_factor": 0.62,
+    "alpha_min": 58,
+    "alpha_max": 145,
+    "colors": {
+      "in_progress": [
+        214,
+        163,
+        55
+      ],
+      "translated": [
+        72,
+        168,
+        104
+      ],
+      "reviewed": [
+        146,
+        116,
+        214
+      ]
+    }
+  }
+}

@@ -1,0 +1,117 @@
+QWidget#mainBackgroundHost,
+QSplitter,
+QSplitter::handle,
+QWidget#fileTabSurface,
+QWidget#editorPanel,
+QWidget#originalEditorSurface,
+QWidget#translationEditorSurface,
+QTabWidget#mainTabs,
+QTabWidget#mainTabs::pane,
+QStackedWidget,
+QStackedWidget > QWidget,
+QFrame {
+    background: transparent;
+}
+
+QWidget#projectTreePanel,
+QWidget#fileTabSurface,
+QWidget#editorPanel,
+QWidget#originalSection,
+QWidget#translationSection,
+QWidget#originalEditorSurface,
+QWidget#translationEditorSurface,
+QTabWidget#mainTabs,
+QTabWidget#mainTabs::pane,
+QStackedWidget,
+QStackedWidget > QWidget,
+QFrame,
+QGroupBox {
+    background-color: rgba(17, 22, 28, {{PANEL_ALPHA}});
+    border-color: rgba(122, 136, 156, {{BORDER_ALPHA}});
+}
+
+QWidget#projectTreePanel,
+QWidget#fileTabSurface,
+QTabWidget#mainTabs,
+QTabWidget#mainTabs::pane,
+QGroupBox {
+    border-color: rgba(136, 150, 172, {{BORDER_STRONG_ALPHA}});
+}
+
+QAbstractScrollArea,
+QTableView,
+QPlainTextEdit#originalEditor,
+QPlainTextEdit#translationEditor,
+QListView,
+QTextEdit {
+    background: transparent;
+    border-color: rgba(122, 136, 156, {{BORDER_ALPHA}});
+}
+
+QTableView {
+    alternate-background-color: rgba(24, 30, 38, {{ALT_ROW_ALPHA}});
+}
+
+QTreeView,
+QWidget#originalEditorGutter,
+QWidget#translationEditorGutter,
+QHeaderView,
+QHeaderView::section {
+    background-color: rgba(13, 18, 24, {{GUTTER_ALPHA}});
+    border-color: rgba(122, 136, 156, {{BORDER_ALPHA}});
+}
+
+QWidget[sekaiOverlayViewport="true"],
+QWidget[sekaiOverlayInner="true"] {
+    background-color: rgba(12, 17, 23, {{VIEWPORT_ALPHA}});
+    border: none;
+}
+
+QTabBar,
+QTabBar::tab-bar {
+    background: transparent;
+}
+
+QTabBar::tab {
+    background-color: rgba(16, 22, 29, {{TAB_ALPHA}});
+    border-color: rgba(136, 150, 172, {{BORDER_STRONG_ALPHA}});
+}
+
+QTabBar::tab:selected {
+    background-color: rgba(22, 29, 38, {{TAB_SELECTED_ALPHA}});
+    border-color: rgba(99, 144, 214, {{BORDER_FOCUS_ALPHA}});
+}
+
+QTabBar::tab:!selected:hover {
+    background-color: rgba(20, 26, 34, {{TAB_HOVER_ALPHA}});
+    border-color: rgba(150, 164, 186, {{BORDER_HOVER_ALPHA}});
+}
+
+QLineEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox,
+QPushButton,
+QToolButton {
+    background-color: rgba(18, 24, 31, {{INPUT_ALPHA}});
+    border-color: rgba(136, 150, 172, {{BORDER_STRONG_ALPHA}});
+}
+
+QLineEdit:hover,
+QComboBox:hover,
+QSpinBox:hover,
+QDoubleSpinBox:hover,
+QPushButton:hover,
+QToolButton:hover {
+    border-color: rgba(99, 144, 214, {{BORDER_FOCUS_ALPHA}});
+}
+
+QSplitter::handle {
+    background-color: rgba(13, 18, 24, {{SPLITTER_ALPHA}});
+}
+
+QMenuBar,
+QMenu,
+QStatusBar {
+    background-color: rgba(10, 14, 19, {{MENU_ALPHA}});
+}

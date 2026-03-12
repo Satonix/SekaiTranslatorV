@@ -35,7 +35,7 @@ class ProjectSettingsAITab(QWidget):
             "Selecione um prompt alternativo para definir o estilo.\n"
             "Você também pode complementar com regras adicionais (opcional)."
         )
-        hint.setStyleSheet("color: #888;")
+        hint.setProperty("mutedText", True)
         hint.setWordWrap(True)
         layout.addWidget(hint)
 

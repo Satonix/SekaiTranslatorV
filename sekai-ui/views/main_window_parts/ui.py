@@ -22,8 +22,11 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QApplication,
     QCheckBox,
+    QAbstractScrollArea,
 )
 
+from themes.theme_manager import ThemeManager
+from views.background_canvas import BackgroundCanvas
 from views.file_tab import FileTab
 
 if TYPE_CHECKING:
@@ -46,17 +49,135 @@ class UIMixin:
     def _settings(self) -> QSettings:
         return QSettings(self.app_name, self.app_name)
 
+    def _apply_saved_theme(self) -> None:
+        app = QApplication.instance()
+        if app is None:
+            return
+        applied = ThemeManager.apply_saved_theme(app, self.app_name)
+        self.setProperty("sekai_theme_name", applied)
+        self._apply_background_settings()
+        try:
+            self.style().unpolish(self)
+            self.style().polish(self)
+        except Exception:
+            pass
+        try:
+            self.update()
+        except Exception:
+            pass
+
+    def _default_background_path(self) -> str:
+        try:
+            base_dir = Path(__file__).resolve().parents[2]
+            path = base_dir / "assets" / "backgrounds" / "sekai_default_bg.png"
+            if path.exists():
+                return str(path)
+        except Exception:
+            pass
+        return ""
+
+    def _background_overlay_qss(self, enabled: bool) -> str:
+        if not enabled:
+            return ""
+
+        try:
+            overlay = int(self._settings().value("ui/background_overlay", 140) or 140)
+        except Exception:
+            overlay = 140
+
+        return ThemeManager.build_overlay_stylesheet(
+            enabled=enabled,
+            overlay=overlay,
+            app=QApplication.instance(),
+        )
+
+    def _refresh_background_overlay_targets(self, enabled: bool) -> None:
+        try:
+            targets = []
+            for area in self.findChildren(QAbstractScrollArea):
+                try:
+                    area.setAttribute(Qt.WA_StyledBackground, True)
+                except Exception:
+                    pass
+                viewport = getattr(area, "viewport", lambda: None)()
+                if viewport is not None:
+                    targets.append(viewport)
+            for widget in targets:
+                try:
+                    widget.setProperty("sekaiOverlayViewport", bool(enabled))
+                    widget.setAttribute(Qt.WA_StyledBackground, True)
+                    widget.setAutoFillBackground(False)
+                    widget.style().unpolish(widget)
+                    widget.style().polish(widget)
+                    widget.update()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _apply_background_settings(self) -> None:
+        host = getattr(self, "central_host", None)
+        if host is None or not hasattr(host, "configure"):
+            return
+        s = self._settings()
+        enabled = bool(s.value("ui/background_enabled", False, type=bool))
+        image_path = (s.value("ui/background_path", "", type=str) or "").strip()
+        overlay = s.value("ui/background_overlay", 140)
+        try:
+            overlay = int(overlay)
+        except Exception:
+            overlay = 140
+        try:
+            app = QApplication.instance()
+            if app is not None:
+                app.setProperty("sekai_background_enabled", bool(enabled))
+                app.setProperty("sekai_background_overlay", int(overlay))
+        except Exception:
+            pass
+
+        try:
+            host.configure(
+                enabled=enabled,
+                image_path=image_path,
+                overlay_opacity=overlay,
+                fallback_path=self._default_background_path(),
+                overlay_color=ThemeManager.background_overlay_color(
+                    overlay=overlay,
+                    app=QApplication.instance(),
+                ),
+            )
+        except Exception:
+            pass
+
+        try:
+            self.setStyleSheet(self._background_overlay_qss(enabled))
+        except Exception:
+            pass
+
+        self._refresh_background_overlay_targets(enabled)
+
 
     def _build_ui(self):
+        self.central_host = BackgroundCanvas()
+        self.central_host.setObjectName("mainBackgroundHost")
+        self.central_layout = QVBoxLayout(self.central_host)
+        self.central_layout.setContentsMargins(0, 0, 0, 0)
+        self.central_layout.setSpacing(0)
+
         self.main_splitter = QSplitter(Qt.Horizontal)
-        self.setCentralWidget(self.main_splitter)
+        self.main_splitter.setObjectName("mainSplitter")
+        self.central_layout.addWidget(self.main_splitter)
+        self.setCentralWidget(self.central_host)
 
         tree_container = QWidget()
+        tree_container.setObjectName("projectTreePanel")
         tree_layout = QVBoxLayout(tree_container)
         tree_layout.setContentsMargins(6, 6, 6, 6)
+        tree_layout.setSpacing(0)
 
         self.tree_header = QLabel("Nenhum projeto aberto")
-        self.tree_header.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.tree_header.setObjectName("sectionHeader")
+        self.tree_header.setContentsMargins(0, 0, 0, 0)
         tree_layout.addWidget(self.tree_header)
 
         self.fs_model = QFileSystemModel()
@@ -79,6 +200,7 @@ class UIMixin:
         self.main_splitter.addWidget(tree_container)
 
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("mainTabs")
         self.tabs.setDocumentMode(True)
         self.tabs.setMovable(True)
         self.tabs.setTabsClosable(True)
@@ -86,6 +208,7 @@ class UIMixin:
 
         self.main_splitter.addWidget(self.tabs)
         self.main_splitter.setSizes([300, 1200])
+        self._apply_background_settings()
 
 
     def _build_menu(self):

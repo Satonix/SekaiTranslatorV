@@ -112,7 +112,7 @@ class ProjectSettingsDialog(QDialog):
             "Perfis organizam variações por jogo (ex.: yandere)."
         )
         hint.setWordWrap(True)
-        hint.setStyleSheet("color: #888;")
+        hint.setProperty("mutedText", True)
         form.addRow("", hint)
 
         outer.addWidget(box)
@@ -228,7 +228,7 @@ class ProjectSettingsDialog(QDialog):
             "Dica: se o preset for \"Personalizado\", o texto acima será enviado no request como custom_prompt_text."
         )
         hint.setWordWrap(True)
-        hint.setStyleSheet("color: #888;")
+        hint.setProperty("mutedText", True)
         form.addRow("", hint)
 
         outer.addWidget(box)

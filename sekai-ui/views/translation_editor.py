@@ -35,6 +35,7 @@ class TranslationEditor(QPlainTextEdit):
         font.setStyleHint(QFont.Monospace)
         font.setPointSize(10)
         self.setFont(font)
+        self.document().setDocumentMargin(0.0)
 
         self._session: EditSession | None = None
         self._rows: list[int] = []

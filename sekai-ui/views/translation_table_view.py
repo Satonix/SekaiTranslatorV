@@ -1,4 +1,6 @@
 from PySide6.QtWidgets import QTableView, QHeaderView
+
+from views.status_delegate import StatusDelegate
 from PySide6.QtCore import Qt
 
 
@@ -7,8 +9,8 @@ class TranslationTableView(QTableView):
     View da tabela de tradução.
     Visual e UX fiéis ao SekaiTranslator antigo.
 
-    - NÃO usa delegate de status
-    - Status é exibido apenas por cor de fundo da linha (via model)
+    - Usa delegate compatível para preservar as cores do status
+    - Status é exibido por cor de fundo da linha (via model)
     """
 
     def __init__(self, parent=None):
@@ -45,3 +47,11 @@ class TranslationTableView(QTableView):
 
         self.setSortingEnabled(False)
         self.setTabKeyNavigation(False)
+        self.setItemDelegate(StatusDelegate(self))
+
+        try:
+            self.viewport().setProperty("sekaiOverlayViewport", True)
+            self.viewport().setAttribute(Qt.WA_StyledBackground, True)
+            self.viewport().setAutoFillBackground(False)
+        except Exception:
+            pass

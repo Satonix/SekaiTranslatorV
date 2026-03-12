@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QWidget,
@@ -40,39 +40,59 @@ class EditorPanel(QWidget):
         self._entries: list[dict] = []
         self._rows: list[int] = []
 
+        self.setObjectName("editorPanel")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self._pending_refresh_source_rows: set[int] = set()
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(33)
+        self._refresh_timer.timeout.connect(self._flush_pending_row_refreshes)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(6)
 
         splitter = QSplitter(Qt.Vertical)
+        splitter.setObjectName("editorSplitter")
         splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(10)
 
         original_container = QWidget()
+        original_container.setObjectName("originalSection")
+        original_container.setAttribute(Qt.WA_StyledBackground, True)
         original_layout = QVBoxLayout(original_container)
         original_layout.setContentsMargins(0, 0, 0, 0)
-        original_layout.setSpacing(2)
+        original_layout.setSpacing(4)
 
         original_label = QLabel("Original")
-        original_label.setFixedHeight(18)
-        original_label.setStyleSheet("font-weight: bold; color: #cbd5e1;")
+        original_label.setObjectName("originalSectionLabel")
+        original_label.setFixedHeight(22)
+        original_label.setProperty("sectionLabel", True)
 
         self.original_editor = OriginalEditor(self)
+        self.original_editor.setObjectName("originalEditor")
         self.original_with_gutter = EditorWithGutter(self.original_editor)
+        self.original_with_gutter.setObjectName("originalEditorSurface")
 
         original_layout.addWidget(original_label)
         original_layout.addWidget(self.original_with_gutter)
 
         translation_container = QWidget()
+        translation_container.setObjectName("translationSection")
+        translation_container.setAttribute(Qt.WA_StyledBackground, True)
         translation_layout = QVBoxLayout(translation_container)
         translation_layout.setContentsMargins(0, 0, 0, 0)
-        translation_layout.setSpacing(2)
+        translation_layout.setSpacing(4)
 
         translation_label = QLabel("Tradução")
-        translation_label.setFixedHeight(18)
-        translation_label.setStyleSheet("font-weight: bold; color: #cbd5e1;")
+        translation_label.setObjectName("translationSectionLabel")
+        translation_label.setFixedHeight(22)
+        translation_label.setProperty("sectionLabel", True)
 
         self.translation_editor = TranslationEditor(self)
+        self.translation_editor.setObjectName("translationEditor")
         self.translation_with_gutter = EditorWithGutter(self.translation_editor)
+        self.translation_with_gutter.setObjectName("translationEditorSurface")
 
         translation_layout.addWidget(translation_label)
         translation_layout.addWidget(self.translation_with_gutter)
@@ -106,6 +126,8 @@ class EditorPanel(QWidget):
             pass
 
     def start_edit_session(self, entries: list[dict], rows: list[int]):
+        self._refresh_timer.stop()
+        self._pending_refresh_source_rows.clear()
         self._session = EditSession()
         self._session.start(entries, rows)
 
@@ -132,6 +154,8 @@ class EditorPanel(QWidget):
             self.translation_with_gutter.gutter.update()
 
     def clear(self):
+        self._refresh_timer.stop()
+        self._pending_refresh_source_rows.clear()
         self._session.clear()
         self._entries = []
         self._rows = []
@@ -205,9 +229,20 @@ class EditorPanel(QWidget):
             return
 
         self._file_tab.set_dirty(True)
-        # Refresh table rows so status color (IN_PROGRESS) is visible immediately.
         try:
-            for sr in (self._session.rows or []):
+            self._pending_refresh_source_rows.update(int(sr) for sr in (self._session.rows or []))
+            if not self._refresh_timer.isActive():
+                self._refresh_timer.start()
+        except Exception:
+            pass
+
+    def _flush_pending_row_refreshes(self):
+        if not self._file_tab or not self._pending_refresh_source_rows:
+            return
+        rows = sorted(self._pending_refresh_source_rows)
+        self._pending_refresh_source_rows.clear()
+        try:
+            for sr in rows:
                 vr = self._file_tab._visible_row_from_source_row(sr)
                 if vr is not None:
                     self._file_tab.model.refresh_row(vr)

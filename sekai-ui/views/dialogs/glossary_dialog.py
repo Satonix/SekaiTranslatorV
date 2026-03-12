@@ -28,6 +28,7 @@ class GlossaryDialog(QDialog):
 
         title = QLabel("Glossário")
         title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title.setProperty("titleLabel", True)
         layout.addWidget(title)
 
         self.term_list = QListWidget()

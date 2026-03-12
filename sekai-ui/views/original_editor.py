@@ -20,6 +20,7 @@ class OriginalEditor(QPlainTextEdit):
         font.setStyleHint(QFont.Monospace)
         font.setPointSize(10)
         self.setFont(font)
+        self.document().setDocumentMargin(0.0)
 
         self._entries: list[dict] = []
         self._rows: list[int] = []

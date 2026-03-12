@@ -24,6 +24,7 @@ class AboutDialog(QDialog):
 
         title = QLabel("SekaiTranslator")
         title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        title.setProperty("titleLabel", True)
         layout.addWidget(title)
 
         version = QLabel("Versão 1.0 (UI em reconstrução)")

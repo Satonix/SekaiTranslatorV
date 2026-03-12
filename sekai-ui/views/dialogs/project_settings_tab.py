@@ -101,7 +101,7 @@ class ProjectSettingsTab(QWidget):
 
         self.lbl_project_path = QLabel("—")
         self.lbl_project_path.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.lbl_project_path.setStyleSheet("color: #AAA;")
+        self.lbl_project_path.setProperty("mutedText", True)
         form.addRow("Caminho do projeto:", self.lbl_project_path)
 
         self.ed_name = QLineEdit()
@@ -126,7 +126,7 @@ class ProjectSettingsTab(QWidget):
 
         # Entrada sempre automática (detectada por arquivo)
         self.lbl_input_encoding = QLabel("Automático (sempre igual ao arquivo original)")
-        self.lbl_input_encoding.setStyleSheet("color: #888;")
+        self.lbl_input_encoding.setProperty("mutedText", True)
         self.lbl_input_encoding.setWordWrap(True)
         form.addRow("Encoding (entrada):", self.lbl_input_encoding)
 
