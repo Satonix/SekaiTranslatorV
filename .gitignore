@@ -12,6 +12,7 @@ venv/
 
 # PyInstaller
 *.spec
+!SekaiTranslator.spec
 
 # Qt / caches
 *.log
