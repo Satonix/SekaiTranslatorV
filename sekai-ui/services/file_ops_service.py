@@ -149,14 +149,6 @@ def open_file(main_window: Any, index: QModelIndex) -> None:
         if not hasattr(main_window, "_open_files") or main_window._open_files is None:
             main_window._open_files = {}
         main_window._open_files[file_path] = tab
-
-        title = os.path.basename(file_path) or file_path
-        tab_index = main_window.tabs.addTab(tab, title)
-        main_window.tabs.setCurrentIndex(tab_index)
-
-        if not hasattr(main_window, "_open_files") or main_window._open_files is None:
-            main_window._open_files = {}
-        main_window._open_files[file_path] = tab
     except Exception as e:
         QMessageBox.critical(main_window, "Erro", f"Falha ao abrir aba:\n{e}")
         return

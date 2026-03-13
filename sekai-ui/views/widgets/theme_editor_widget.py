@@ -87,6 +87,17 @@ class ThemePreviewPanel(QFrame):
         self.overlay_sample.setStyleSheet("border-radius: 8px;")
         panel_layout.addWidget(self.overlay_sample)
 
+        overlay_status_row = QHBoxLayout()
+        self.overlay_in_progress = QLabel("Overlay In Progress")
+        self.overlay_translated = QLabel("Overlay Translated")
+        self.overlay_reviewed = QLabel("Overlay Reviewed")
+        for w in (self.overlay_in_progress, self.overlay_translated, self.overlay_reviewed):
+            w.setAlignment(Qt.AlignCenter)
+            w.setMinimumHeight(28)
+            w.setStyleSheet("border-radius: 6px; padding: 4px 10px;")
+            overlay_status_row.addWidget(w)
+        panel_layout.addLayout(overlay_status_row)
+
         root.addWidget(self.panel)
 
     def apply_preview(
@@ -96,6 +107,7 @@ class ThemePreviewPanel(QFrame):
         palette: QPalette,
         status_colors: dict[str, str],
         overlay_color: str,
+        status_overlay_colors: dict[str, str],
     ) -> None:
         self.setPalette(palette)
         self.setAutoFillBackground(True)
@@ -112,6 +124,10 @@ class ThemePreviewPanel(QFrame):
         self.overlay_sample.setStyleSheet(
             f"border-radius: 8px; background: {rgba}; color: white; padding: 8px;"
         )
+
+        self._apply_status_style(self.overlay_in_progress, status_overlay_colors.get("in_progress", "#d97706"))
+        self._apply_status_style(self.overlay_translated, status_overlay_colors.get("translated", "#22c55e"))
+        self._apply_status_style(self.overlay_reviewed, status_overlay_colors.get("reviewed", "#8b5cf6"))
 
     @staticmethod
     def _apply_status_style(widget: QLabel, color: str) -> None:
@@ -141,6 +157,9 @@ class ThemeEditorWidget(QWidget):
         ("status_in_progress", "Status: In Progress"),
         ("status_translated", "Status: Translated"),
         ("status_reviewed", "Status: Reviewed"),
+        ("status_overlay_in_progress", "Overlay do Status: In Progress"),
+        ("status_overlay_translated", "Overlay do Status: Translated"),
+        ("status_overlay_reviewed", "Overlay do Status: Reviewed"),
     ]
 
     def __init__(self, parent=None):
@@ -249,20 +268,43 @@ class ThemeEditorWidget(QWidget):
                 self.theme_list.addItem(item)
 
             target = ThemeManager.normalize_theme_name(
-                current_theme_name or ThemeManager.load_saved_theme_name()
+                current_theme_name or self._selected_theme_name or ThemeManager.load_saved_theme_name()
             )
+            target_row = -1
             for i in range(self.theme_list.count()):
                 if self.theme_list.item(i).text() == target:
-                    self.theme_list.setCurrentRow(i)
+                    target_row = i
                     break
 
-            if not self.theme_list.currentItem() and self.theme_list.count() > 0:
-                self.theme_list.setCurrentRow(0)
+            if target_row < 0 and self.theme_list.count() > 0:
+                target_row = 0
+
+            if target_row >= 0:
+                self.theme_list.setCurrentRow(target_row)
+                current = self.theme_list.item(target_row)
+                self._selected_theme_name = current.text()
+                self._load_selected_theme()
         finally:
             self._loading = False
             self._sync_buttons()
+            self._update_preview()
+
+    def select_theme(self, theme_name: str | None) -> bool:
+        target = ThemeManager.normalize_theme_name(theme_name)
+        current = self.current_theme_name()
+        if current == target:
+            return True
+        for i in range(self.theme_list.count()):
+            item = self.theme_list.item(i)
+            if item is not None and item.text() == target:
+                self.theme_list.setCurrentRow(i)
+                return True
+        return False
 
     def current_theme_name(self) -> str:
+        item = self.theme_list.currentItem()
+        if item is not None and item.text().strip():
+            return item.text().strip()
         return self._selected_theme_name or ThemeManager.DEFAULT_THEME_NAME
 
     def apply_to_settings(self) -> str:
@@ -292,12 +334,24 @@ class ThemeEditorWidget(QWidget):
     def _on_theme_selected(self, current: QListWidgetItem | None, previous: QListWidgetItem | None) -> None:
         if self._loading:
             return
+
+        # Captura o nome alvo antes de qualquer salvamento, porque salvar um tema custom
+        # pode recarregar a lista e invalidar o QListWidgetItem recebido pelo sinal.
+        selected_name = ThemeManager.DEFAULT_THEME_NAME
+        if current is not None:
+            try:
+                txt = current.text().strip()
+                if txt:
+                    selected_name = txt
+            except RuntimeError:
+                selected_name = self._selected_theme_name or ThemeManager.DEFAULT_THEME_NAME
+
         try:
             self._save_current_theme_changes()
         except Exception:
             pass
 
-        self._selected_theme_name = current.text() if current else ThemeManager.DEFAULT_THEME_NAME
+        self._selected_theme_name = ThemeManager.normalize_theme_name(selected_name)
         self._load_selected_theme()
         self._sync_buttons()
         self._update_preview()
@@ -361,12 +415,14 @@ class ThemeEditorWidget(QWidget):
         palette = ThemeManager.build_preview_palette(base_name)
         status_colors = ThemeManager.preview_status_colors(self._draft_tokens)
         overlay_color = str(self._draft_tokens.get("background_overlay_color") or "#000000")
+        status_overlay_colors = ThemeManager.preview_status_overlay_colors(self._draft_tokens)
 
         self.preview.apply_preview(
             stylesheet=stylesheet,
             palette=palette,
             status_colors=status_colors,
             overlay_color=overlay_color,
+            status_overlay_colors=status_overlay_colors,
         )
 
     def _create_theme(self) -> None:

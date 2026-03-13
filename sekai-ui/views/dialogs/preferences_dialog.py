@@ -173,6 +173,7 @@ class PreferencesDialog(QDialog):
         self.btn_clear_background.clicked.connect(lambda: self.background_path_edit.setText(""))
         self.overlay_slider.valueChanged.connect(self._update_overlay_label)
         self.chk_background_enabled.toggled.connect(self._update_background_controls)
+        self.theme_box.currentTextChanged.connect(self._on_general_theme_changed)
 
         self._load()
 
@@ -207,6 +208,7 @@ class PreferencesDialog(QDialog):
     def _apply(self) -> None:
         s = QSettings("SekaiTranslatorV", "SekaiTranslatorV")
 
+        self.theme_editor.select_theme(self.theme_box.currentText())
         selected_theme = ThemeManager.normalize_theme_name(self.theme_editor.apply_to_settings())
 
         self.theme_box.clear()
@@ -245,6 +247,12 @@ class PreferencesDialog(QDialog):
         except Exception:
             pass
         super().reject()
+
+    def _on_general_theme_changed(self, text: str) -> None:
+        try:
+            self.theme_editor.select_theme(text)
+        except Exception:
+            pass
 
     def _browse_background(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

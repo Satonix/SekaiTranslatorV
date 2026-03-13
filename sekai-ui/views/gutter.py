@@ -24,7 +24,7 @@ class EditorGutter(QWidget):
         self._cached_bg = QColor()
         self._cached_fg = QColor()
         self._cached_divider = QColor()
-        self._visual_cache_key: tuple[str, bool, int] | None = None
+        self._visual_cache_key: tuple[str, str, bool, int] | None = None
         self.setFont(editor.font())
         self.editor.installEventFilter(self)
         self.update_width()
@@ -80,7 +80,11 @@ class EditorGutter(QWidget):
             theme_id = str(inst.property("sekai_theme") or "").strip() if inst is not None else ""
         except Exception:
             theme_id = ""
-        cache_key = (theme_id, background_enabled, overlay)
+        try:
+            theme_signature = str(inst.property("sekai_theme_signature") or "").strip() if inst is not None else ""
+        except Exception:
+            theme_signature = ""
+        cache_key = (theme_id, theme_signature, background_enabled, overlay)
         if self._visual_cache_key == cache_key and self._cached_bg.isValid() and self._cached_fg.isValid() and self._cached_divider.isValid():
             return
 

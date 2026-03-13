@@ -26,8 +26,8 @@ QStackedWidget,
 QStackedWidget > QWidget,
 QFrame,
 QGroupBox {
-    background-color: rgba(248, 250, 253, {{PANEL_ALPHA}});
-    border-color: rgba(138, 151, 168, {{BORDER_ALPHA}});
+    background-color: rgba(255, 255, 255, {{PANEL_ALPHA}});
+    border-color: rgba(59, 130, 246, {{BORDER_ALPHA}});
 }
 
 QWidget#projectTreePanel,
@@ -35,19 +35,18 @@ QWidget#fileTabSurface,
 QTabWidget#mainTabs,
 QTabWidget#mainTabs::pane,
 QGroupBox {
-    border-color: rgba(124, 140, 160, {{BORDER_STRONG_ALPHA}});
+    border-color: rgba(59, 130, 246, {{BORDER_STRONG_ALPHA}});
 }
 
 QAbstractScrollArea,
 QListView {
     background: transparent;
-    border-color: rgba(138, 151, 168, {{BORDER_ALPHA}});
+    border-color: rgba(59, 130, 246, {{BORDER_ALPHA}});
 }
 
 QTableView {
     background: transparent;
-    alternate-background-color: rgba(241, 245, 250, {{ALT_ROW_ALPHA}});
-    gridline-color: rgba(138, 151, 168, {{BORDER_ALPHA}});
+    alternate-background-color: rgba(241, 245, 249, {{ALT_ROW_ALPHA}});
 }
 
 QTableView::item {
@@ -55,20 +54,7 @@ QTableView::item {
 }
 
 QTableView::item:alternate {
-    background-color: rgba(241, 245, 250, {{ALT_ROW_ALPHA}});
-}
-
-QTableView::item {
-    background: transparent;
-}
-
-QTableView::item:alternate {
-    background-color: rgba(241, 245, 250, {{ALT_ROW_ALPHA}});
-}
-
-QTableCornerButton::section {
-    background-color: rgba(245, 248, 252, {{GUTTER_ALPHA}});
-    border-color: rgba(138, 151, 168, {{BORDER_ALPHA}});
+    background-color: rgba(241, 245, 249, {{ALT_ROW_ALPHA}});
 }
 
 QTreeView,
@@ -76,14 +62,14 @@ QWidget#originalEditorGutter,
 QWidget#translationEditorGutter,
 QHeaderView,
 QHeaderView::section {
-    background-color: rgba(245, 248, 252, {{GUTTER_ALPHA}});
-    border-color: rgba(138, 151, 168, {{BORDER_ALPHA}});
+    background-color: rgba(248, 250, 252, {{GUTTER_ALPHA}});
+    border-color: rgba(59, 130, 246, {{BORDER_ALPHA}});
 }
 
 QAbstractScrollArea > QWidget[sekaiOverlayViewport="true"],
 QWidget[sekaiOverlayViewport="true"],
 QWidget[sekaiOverlayInner="true"] {
-    background-color: rgba(252, 253, 255, {{VIEWPORT_ALPHA}});
+    background-color: rgba(255, 255, 255, {{VIEWPORT_ALPHA}});
     border: none;
 }
 
@@ -93,18 +79,18 @@ QTabBar::tab-bar {
 }
 
 QTabBar::tab {
-    background-color: rgba(240, 244, 249, {{TAB_ALPHA}});
-    border-color: rgba(124, 140, 160, {{BORDER_STRONG_ALPHA}});
+    background-color: rgba(248, 250, 252, {{TAB_ALPHA}});
+    border-color: rgba(59, 130, 246, {{BORDER_STRONG_ALPHA}});
 }
 
 QTabBar::tab:selected {
-    background-color: rgba(252, 253, 255, {{TAB_SELECTED_ALPHA}});
-    border-color: rgba(80, 126, 205, {{BORDER_FOCUS_ALPHA}});
+    background-color: rgba(239, 246, 255, {{TAB_SELECTED_ALPHA}});
+    border-color: rgba(37, 99, 235, {{BORDER_FOCUS_ALPHA}});
 }
 
 QTabBar::tab:!selected:hover {
-    background-color: rgba(246, 249, 253, {{TAB_HOVER_ALPHA}});
-    border-color: rgba(124, 140, 160, {{BORDER_HOVER_ALPHA}});
+    background-color: rgba(243, 244, 246, {{TAB_HOVER_ALPHA}});
+    border-color: rgba(59, 130, 246, {{BORDER_HOVER_ALPHA}});
 }
 
 QLineEdit,
@@ -113,8 +99,8 @@ QSpinBox,
 QDoubleSpinBox,
 QPushButton,
 QToolButton {
-    background-color: rgba(252, 253, 255, {{INPUT_ALPHA}});
-    border-color: rgba(124, 140, 160, {{BORDER_STRONG_ALPHA}});
+    background-color: rgba(255, 255, 255, {{INPUT_ALPHA}});
+    border-color: rgba(59, 130, 246, {{BORDER_STRONG_ALPHA}});
 }
 
 QLineEdit:hover,
@@ -123,23 +109,23 @@ QSpinBox:hover,
 QDoubleSpinBox:hover,
 QPushButton:hover,
 QToolButton:hover {
-    border-color: rgba(80, 126, 205, {{BORDER_FOCUS_ALPHA}});
+    border-color: rgba(37, 99, 235, {{BORDER_FOCUS_ALPHA}});
 }
 
 QSplitter::handle {
-    background-color: rgba(236, 242, 248, {{SPLITTER_ALPHA}});
+    background-color: rgba(226, 232, 240, {{SPLITTER_ALPHA}});
 }
 
 QMenuBar,
 QMenu,
 QStatusBar {
-    background-color: rgba(246, 249, 253, {{MENU_ALPHA}});
+    background-color: rgba(255, 255, 255, {{MENU_ALPHA}});
 }
 
 QPlainTextEdit#originalEditor,
 QPlainTextEdit#translationEditor,
 QTextEdit {
-    background-color: rgba(252, 253, 255, {{VIEWPORT_ALPHA}});
+    background-color: rgba(255, 255, 255, {{VIEWPORT_ALPHA}});
 }
 
 QTabBar::scroller {

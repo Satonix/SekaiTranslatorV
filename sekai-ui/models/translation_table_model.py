@@ -14,7 +14,7 @@ class TranslationTableModel(QAbstractTableModel):
         self.entries: list[dict] = []
         self._visible_to_source_row: list[int] = []
         self._entry_id_to_source_row: dict[str, int] = {}
-        self._status_palette_cache_key: tuple[str, bool, int] | None = None
+        self._status_palette_cache_key: tuple[str, str, bool, int] | None = None
         self._status_palette_cache: dict[str, QColor | None] = {}
         self.set_entries(self.all_entries)
 
@@ -61,7 +61,11 @@ class TranslationTableModel(QAbstractTableModel):
             theme_id = str(app.property("sekai_theme") or "").strip() if app is not None else ""
         except Exception:
             theme_id = ""
-        cache_key = (theme_id, enabled, overlay)
+        try:
+            theme_signature = str(app.property("sekai_theme_signature") or "").strip() if app is not None else ""
+        except Exception:
+            theme_signature = ""
+        cache_key = (theme_id, theme_signature, enabled, overlay)
         if self._status_palette_cache_key == cache_key and self._status_palette_cache:
             return self._status_palette_cache
         palette = {

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 from PySide6.QtWidgets import QMessageBox
 
 from views.file_tab import FileTab
+from services.file_progress_service import compute_entries_progress, get_file_progress
 
 if TYPE_CHECKING:
     from views.dialogs.search_dialog import SearchResult
@@ -107,6 +108,13 @@ class ExportOpsMixin:
         except Exception as e:
             QMessageBox.critical(self, "Erro", str(e))
 
+    def _compute_entries_progress(self, entries: list[dict]) -> tuple[int, int, int]:
+        return compute_entries_progress(entries)
+
+    def _is_file_fully_translated(self, entries: list[dict]) -> tuple[bool, int, int, int]:
+        done, total, percent = self._compute_entries_progress(entries)
+        return percent >= 100, done, total, percent
+
     def _export_project_batch(self):
         if not self.current_project:
             return
@@ -118,19 +126,32 @@ class ExportOpsMixin:
 
         supported = self._supported_extensions()
 
+        box = QMessageBox(self)
+        box.setWindowTitle("Exportação em lote")
+        box.setText("Como deseja exportar o projeto?")
+        btn_only_full = box.addButton("Somente arquivos 100% traduzidos", QMessageBox.YesRole)
+        btn_all = box.addButton("Todos os arquivos suportados", QMessageBox.NoRole)
+        box.addButton(QMessageBox.Cancel)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is None or clicked.text().lower().startswith("cancel"):
+            return
+
+        only_full = clicked is btn_only_full
+
         errors: list[str] = []
         count_ok = 0
+        count_skipped_not_full = 0
 
         from services.encoding_service import EncodingService
         from models import project_state_store
 
-        # Feedback consistente sobre o formato de saída
         exp_enc = (self.current_project.get("export_encoding") or "utf-8").strip() or "utf-8"
         exp_bom = bool(self.current_project.get("export_bom", False))
         bom_txt = " (com BOM)" if exp_bom else ""
 
         for base, dirs, files in os.walk(root):
-            # não re-exportar exports
             dirs[:] = [d for d in dirs if d.lower() != "exports"]
 
             for fn in files:
@@ -141,13 +162,26 @@ class ExportOpsMixin:
                 src_path = os.path.join(base, fn)
 
                 try:
-                    # Detecta encoding de ENTRADA por arquivo (state -> BOM -> hints)
+                    if only_full:
+                        open_files = getattr(self, '_open_files', None) or {}
+                        live_tab = open_files.get(src_path)
+                        if live_tab is not None and hasattr(live_tab, '_entries'):
+                            is_full, done, total, percent = self._is_file_fully_translated(getattr(live_tab, '_entries', None) or [])
+                            if not is_full:
+                                count_skipped_not_full += 1
+                                continue
+                        else:
+                            progress = get_file_progress(self.current_project, src_path)
+                            if not bool(progress.get("is_full")):
+                                count_skipped_not_full += 1
+                                continue
+
                     hint_encoding = (self.current_project.get("encoding") or "utf-8").strip() or "utf-8"
                     if hint_encoding.lower() == "auto":
                         hint_encoding = "utf-8"
 
                     st = project_state_store.load_file_state(self.current_project, src_path)
-                    state_encoding = (getattr(st, "encoding", "") or "").strip()
+                    state_encoding = (getattr(st, "encoding", "") or "").strip() if st else ""
 
                     raw = EncodingService.read_bytes(src_path)
 
@@ -190,7 +224,6 @@ class ExportOpsMixin:
                     decoded = EncodingService.decode_bytes(raw, chosen, errors="replace")
                     text = decoded.text or ""
 
-
                     try:
                         ctx = ParseContext(
                             file_path=src_path,
@@ -207,7 +240,6 @@ class ExportOpsMixin:
 
                     entries = parser.parse(ctx, text)
 
-                    # Usa FileTab para aplicar state + export com o mesmo código do arquivo atual
                     tmp = FileTab(self)
                     tmp.file_path = src_path
                     tmp.parser = parser
@@ -219,9 +251,13 @@ class ExportOpsMixin:
                     tmp.set_entries(entries)
                     tmp.load_project_state_if_exists(self.current_project)
 
-                    # ✅ Export consistente (respeita export_encoding + export_bom e o fix de bytes->reencode)
-                    tmp.export_to_disk(self.current_project, parser=parser, ctx=ctx)
+                    if only_full:
+                        is_full, done, total, percent = self._is_file_fully_translated(tmp._entries)
+                        if not is_full:
+                            count_skipped_not_full += 1
+                            continue
 
+                    tmp.export_to_disk(self.current_project, parser=parser, ctx=ctx)
                     count_ok += 1
 
                 except Exception as e:
@@ -237,15 +273,19 @@ class ExportOpsMixin:
                 "Exportação em lote",
                 f"Concluído com erros.\n\n"
                 f"OK: {count_ok}\n"
+                f"Ignorados (<100%): {count_skipped_not_full}\n"
                 f"Erros: {len(errors)}\n"
                 f"Saída: {exp_enc}{bom_txt}\n\n"
                 + "\n".join(errors[:20]),
             )
         else:
+            mode_txt = "somente 100% traduzidos" if only_full else "todos os suportados"
             QMessageBox.information(
                 self,
                 "Exportação em lote",
-                f"OK: {count_ok} arquivos exportados em {exp_enc}{bom_txt}.",
+                f"OK: {count_ok} arquivos exportados em {exp_enc}{bom_txt}.\n"
+                f"Modo: {mode_txt}\n"
+                f"Ignorados (<100%): {count_skipped_not_full}",
             )
 
         self.statusBar().showMessage("Exportação em lote finalizada", 3000)

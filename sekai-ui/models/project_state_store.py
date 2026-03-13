@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from typing import Any
 
 
+_STATE_CACHE: dict[str, tuple[tuple[int, int] | None, 'FileState | None']] = {}
+
+
 @dataclass(frozen=True)
 class FileState:
     """
@@ -114,6 +117,35 @@ def state_path_for_file(project: dict, file_path: str) -> str:
     root = project.get("root_path") or ""
     rel = _safe_relpath(root, file_path)
     return os.path.join(state_root(project), rel + ".json")
+
+
+
+
+def _file_sig(path: str) -> tuple[int, int] | None:
+    try:
+        st = os.stat(path)
+        return (getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000)), int(st.st_size))
+    except Exception:
+        return None
+
+
+def invalidate_file_state_cache(project: dict | None = None, file_path: str | None = None) -> None:
+    if project and file_path:
+        try:
+            _STATE_CACHE.pop(state_path_for_file(project, file_path), None)
+            return
+        except Exception:
+            pass
+    if project:
+        try:
+            prefix = state_root(project)
+            doomed = [k for k in _STATE_CACHE.keys() if k.startswith(prefix)]
+            for k in doomed:
+                _STATE_CACHE.pop(k, None)
+            return
+        except Exception:
+            pass
+    _STATE_CACHE.clear()
 
 
 def _atomic_write_json(path: str, payload: dict) -> None:

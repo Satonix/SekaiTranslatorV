@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 from dataclasses import dataclass
 import json
 import re
@@ -32,71 +33,75 @@ class ThemeSpec:
 
 class ThemeManager:
     SETTINGS_KEY = "ui/theme"
-    DEFAULT_THEME_NAME = "Dark (Padrão)"
+    DEFAULT_THEME_NAME = "Escuro"
     _native_style_name: str | None = None
     _qss_cache: dict[tuple[str, str], str] = {}
     _tokens_cache: dict[tuple[str, str], dict[str, Any]] = {}
     _overlay_cache: dict[tuple[str, int], str] = {}
     _custom_themes_cache: dict[str, ThemeSpec] | None = None
+    _builtin_source_dir_cache: Path | None = None
+    _final_stylesheet_cache: dict[str, str] = {}
+    _theme_signature_cache: dict[str, str] = {}
+    _builtin_source_dir_cache: Path | None = None
+    _effective_tokens_cache: dict[str, dict[str, Any]] = {}
+    _final_qss_cache: dict[str, str] = {}
 
     THEMES: Dict[str, ThemeSpec] = {
-        "Dark (Padrão)": ThemeSpec(
+        "Escuro": ThemeSpec(
             "dark",
-            "Dark (Padrão)",
+            "Escuro",
             "Fusion",
             "dark",
             "dark.qss",
             "dark.overlay.qss.in",
             "dark.json",
         ),
-        "Sekai Future": ThemeSpec(
-            "sekai_future",
-            "Sekai Future",
-            "Fusion",
-            "future",
-            "sekai_future.qss",
-            "sekai_future.overlay.qss.in",
-            "sekai_future.json",
-        ),
-        "Light": ThemeSpec(
+        "Branco": ThemeSpec(
             "light",
-            "Light",
+            "Branco",
             "Fusion",
             "light",
             "light.qss",
             "light.overlay.qss.in",
             "light.json",
         ),
-        "Sistema": ThemeSpec(
-            "system",
-            "Sistema",
-            "system",
-            "system",
-            "system.qss",
-            "system.overlay.qss.in",
-            "system.json",
+        "Sekai": ThemeSpec(
+            "sekai_future",
+            "Sekai",
+            "Fusion",
+            "future",
+            "sekai_future.qss",
+            "sekai_future.overlay.qss.in",
+            "sekai_future.json",
         ),
     }
 
     BUILTIN_ID_MAP = {spec.id: name for name, spec in THEMES.items()}
     LEGACY_MAP = {
-        "dark": "Dark (Padrão)",
-        "dark (default)": "Dark (Padrão)",
-        "dark_classic": "Dark (Padrão)",
-        "light": "Light",
-        "system": "Sistema",
-        "sistema": "Sistema",
-        "sekai": "Sekai Future",
-        "future": "Sekai Future",
-        "sekai future": "Sekai Future",
+        "dark": "Escuro",
+        "escuro": "Escuro",
+        "dark (padrão)": "Escuro",
+        "dark (default)": "Escuro",
+        "dark_classic": "Escuro",
+        "light": "Branco",
+        "branco": "Branco",
+        "white": "Branco",
+        "sekai": "Sekai",
+        "future": "Sekai",
+        "sekai future": "Sekai",
+        "sistema": "Escuro",
+        "system": "Escuro",
     }
 
     @classmethod
     def builtin_source_dir(cls) -> Path:
+        if cls._builtin_source_dir_cache is not None and cls._builtin_source_dir_cache.exists():
+            return cls._builtin_source_dir_cache
         found = cls._find_builtin_source_dir()
-        if found is not None:
-            return found
-        return Path(__file__).resolve().parent
+        if found is None:
+            found = Path(__file__).resolve().parent
+        cls._builtin_source_dir_cache = found
+        return found
 
     @classmethod
     def themes_dir(cls) -> Path:
@@ -133,7 +138,7 @@ class ThemeManager:
         if builtin_name:
             return cls.THEMES[builtin_name]
         if normalized == "dark_classic":
-            return cls.THEMES["Dark (Padrão)"]
+            return cls.THEMES["Escuro"]
         for spec in cls._custom_themes().values():
             if spec.id.lower() == normalized:
                 return spec
@@ -176,24 +181,18 @@ class ThemeManager:
         except Exception:
             pass
 
-        try:
-            app.setStyleSheet("")
-        except Exception:
-            pass
+        qss = cls._build_final_stylesheet(spec)
+        palette = cls._build_palette(spec.palette_mode, app)
+        signature = cls._theme_signature(spec, qss)
 
-        app.setPalette(cls._build_palette(spec.palette_mode, app))
+        app.setPalette(palette)
+        if app.styleSheet() != qss:
+            app.setStyleSheet(qss)
 
-        qss = cls._load_qss(spec)
-        if spec.is_custom:
-            qss += "\n\n" + cls._build_override_qss(cls.editable_tokens_for_theme(spec.display_name))
-            custom_qss = ThemeStorage.read_custom_qss(spec.id)
-            if custom_qss:
-                qss += "\n\n" + custom_qss
-
-        app.setStyleSheet(qss)
         app.setProperty("sekai_theme", spec.id)
         app.setProperty("sekai_theme_name", spec.display_name)
-        cls._repolish_all_widgets(app)
+        app.setProperty("sekai_theme_signature", signature)
+        cls._refresh_top_level_widgets(app)
         return spec.display_name
 
     @classmethod
@@ -214,6 +213,14 @@ class ThemeManager:
             "reviewed": str(preview_tokens.get("status_reviewed") or "#8b5cf6"),
         }
 
+
+    @classmethod
+    def preview_status_overlay_colors(cls, preview_tokens: dict[str, Any]) -> dict[str, str]:
+        return {
+            "in_progress": str(preview_tokens.get("status_overlay_in_progress") or preview_tokens.get("status_in_progress") or "#d97706"),
+            "translated": str(preview_tokens.get("status_overlay_translated") or preview_tokens.get("status_translated") or "#22c55e"),
+            "reviewed": str(preview_tokens.get("status_overlay_reviewed") or preview_tokens.get("status_reviewed") or "#8b5cf6"),
+        }
     @classmethod
     def build_overlay_stylesheet(
         cls,
@@ -469,9 +476,12 @@ class ThemeManager:
     @classmethod
     def refresh_custom_themes(cls) -> None:
         cls._custom_themes_cache = None
+        cls._builtin_source_dir_cache = None
         cls._qss_cache.clear()
         cls._tokens_cache.clear()
         cls._overlay_cache.clear()
+        cls._effective_tokens_cache.clear()
+        cls._final_qss_cache.clear()
 
     @classmethod
     def _custom_themes(cls) -> dict[str, ThemeSpec]:
@@ -517,13 +527,21 @@ class ThemeManager:
 
     @classmethod
     def _effective_tokens(cls, spec: ThemeSpec) -> dict[str, Any]:
-        if not spec.is_custom:
-            return deepcopy(cls._load_tokens(spec))
+        cache_key = spec.id
+        cached = cls._effective_tokens_cache.get(cache_key)
+        if cached is not None:
+            return deepcopy(cached)
 
-        base_spec = cls.theme_spec_from_id(spec.base_theme_id or spec.id)
-        base_tokens = deepcopy(cls._load_tokens(base_spec))
-        custom_tokens = ThemeStorage.read_tokens(spec.id)
-        return cls._deep_merge(base_tokens, custom_tokens) if custom_tokens else base_tokens
+        if not spec.is_custom:
+            tokens = deepcopy(cls._load_tokens(spec))
+        else:
+            base_spec = cls.theme_spec_from_id(spec.base_theme_id or spec.id)
+            base_tokens = deepcopy(cls._load_tokens(base_spec))
+            custom_tokens = ThemeStorage.read_tokens(spec.id)
+            tokens = cls._deep_merge(base_tokens, custom_tokens) if custom_tokens else base_tokens
+
+        cls._effective_tokens_cache[cache_key] = deepcopy(tokens)
+        return tokens
 
     @classmethod
     def _flatten_tokens_for_editor(cls, tokens: dict[str, Any], palette_mode: str) -> dict[str, str]:
@@ -653,13 +671,6 @@ QPushButton:hover, QTabBar::tab:selected {{
                 "translated": QColor(26, 64, 48, 255),
                 "reviewed": QColor(73, 62, 120, 255),
             }
-        if theme_id == "system":
-            return {
-                "untranslated": None,
-                "in_progress": QColor(216, 205, 117),
-                "translated": QColor(182, 220, 190),
-                "reviewed": QColor(205, 190, 226),
-            }
         return {
             "untranslated": None,
             "in_progress": QColor(116, 120, 18, 255),
@@ -774,8 +785,8 @@ QPushButton:hover, QTabBar::tab:selected {{
             return cls._load_overlay(base_spec)
 
         source_dir = cls.builtin_source_dir()
-        cache_key = (str(source_dir), spec.overlay_file)
-        cached = cls._qss_cache.get(cache_key)
+        cache_key = (spec.id, 0)
+        cached = cls._overlay_cache.get(cache_key)
         if cached is not None:
             return cached
 
@@ -784,7 +795,7 @@ QPushButton:hover, QTabBar::tab:selected {{
         except Exception:
             data = ""
 
-        cls._qss_cache[cache_key] = data
+        cls._overlay_cache[cache_key] = data
         return data
 
     @classmethod
@@ -842,18 +853,60 @@ QPushButton:hover, QTabBar::tab:selected {{
 
     @classmethod
     def _resolved_style_name(cls, spec: ThemeSpec) -> str:
-        return spec.style if spec.style != "system" else (cls._native_style_name or "windowsvista")
+        return spec.style
 
     @classmethod
-    def _repolish_all_widgets(cls, app: QApplication) -> None:
-        for widget in app.allWidgets():
+    def _refresh_top_level_widgets(cls, app: QApplication) -> None:
+        for widget in app.topLevelWidgets():
             try:
-                style = widget.style()
-                style.unpolish(widget)
-                style.polish(widget)
                 widget.update()
+                central = getattr(widget, "centralWidget", lambda: None)()
+                if central is not None:
+                    central.update()
             except Exception:
                 continue
+
+
+    @classmethod
+    def _build_final_stylesheet(cls, spec: ThemeSpec) -> str:
+        cache_key = f"{spec.id}|{spec.display_name}|{cls._color_to_hex(None) if False else ''}"
+        if spec.is_custom:
+            tokens = cls.editable_tokens_for_theme(spec.display_name)
+            custom_qss = ThemeStorage.read_custom_qss(spec.id)
+            payload = {"id": spec.id, "tokens": tokens, "custom_qss": custom_qss}
+            raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+            cache_key = f"custom:{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()}"
+            cached = cls._final_stylesheet_cache.get(cache_key)
+            if cached is not None:
+                return cached
+            qss = cls._load_qss(spec) + "\n\n" + cls._build_override_qss(tokens)
+            if custom_qss:
+                qss += "\n\n" + custom_qss
+            cls._final_stylesheet_cache[cache_key] = qss
+            return qss
+        cache_key = f"builtin:{spec.qss_file}:{spec.id}"
+        cached = cls._final_stylesheet_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        qss = cls._load_qss(spec)
+        cls._final_stylesheet_cache[cache_key] = qss
+        return qss
+
+    @classmethod
+    def _theme_signature(cls, spec: ThemeSpec, qss: str) -> str:
+        payload = {
+            "id": spec.id,
+            "name": spec.display_name,
+            "qss": qss,
+            "tokens": cls._effective_tokens(spec),
+        }
+        raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+        cache_key = hashlib.sha1(raw.encode("utf-8", errors="replace")).hexdigest()
+        cached = cls._theme_signature_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        cls._theme_signature_cache[cache_key] = cache_key
+        return cache_key
 
     @staticmethod
     def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -881,19 +934,14 @@ QPushButton:hover, QTabBar::tab:selected {{
 
     @staticmethod
     def _build_palette(mode: str, app: QApplication | None = None) -> QPalette:
-        if mode == "system":
-            if app is not None:
-                return QPalette(app.style().standardPalette())
-            return QPalette()
-
         palette = QPalette()
 
         if mode == "light":
             window = QColor(245, 247, 250)
             base = QColor(255, 255, 255)
-            alt_base = QColor(244, 247, 251)
+            alt_base = QColor(248, 250, 252)
             text = QColor(31, 41, 55)
-            button = QColor(248, 250, 252)
+            button = QColor(255, 255, 255)
             highlight = QColor(59, 130, 246)
             highlighted_text = QColor(255, 255, 255)
             tool_tip_base = QColor(255, 255, 255)
@@ -915,18 +963,18 @@ QPushButton:hover, QTabBar::tab:selected {{
             placeholder = QColor(152, 162, 179)
             disabled_text = QColor(119, 129, 145)
         else:
-            window = QColor(24, 27, 34)
-            base = QColor(17, 20, 26)
-            alt_base = QColor(23, 29, 38)
-            text = QColor(237, 242, 247)
-            button = QColor(23, 29, 38)
-            highlight = QColor(79, 140, 255)
+            window = QColor(30, 33, 38)
+            base = QColor(36, 40, 46)
+            alt_base = QColor(43, 48, 55)
+            text = QColor(229, 231, 235)
+            button = QColor(43, 48, 55)
+            highlight = QColor(120, 138, 160)
             highlighted_text = QColor(255, 255, 255)
-            tool_tip_base = QColor(28, 36, 48)
+            tool_tip_base = QColor(43, 48, 55)
             tool_tip_text = QColor(255, 255, 255)
             bright_text = QColor(255, 255, 255)
-            placeholder = QColor(152, 162, 179)
-            disabled_text = QColor(119, 129, 145)
+            placeholder = QColor(156, 163, 175)
+            disabled_text = QColor(107, 114, 128)
 
         palette.setColor(QPalette.Window, window)
         palette.setColor(QPalette.WindowText, text)

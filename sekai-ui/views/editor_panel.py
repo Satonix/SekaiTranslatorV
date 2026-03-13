@@ -230,6 +230,11 @@ class EditorPanel(QWidget):
 
         self._file_tab.set_dirty(True)
         try:
+            if hasattr(self._file_tab, 'touch_progress'):
+                self._file_tab.touch_progress()
+        except Exception:
+            pass
+        try:
             self._pending_refresh_source_rows.update(int(sr) for sr in (self._session.rows or []))
             if not self._refresh_timer.isActive():
                 self._refresh_timer.start()

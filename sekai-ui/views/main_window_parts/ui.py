@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QLabel,
-    QFileSystemModel,
     QMessageBox,
     QApplication,
     QCheckBox,
@@ -28,6 +27,7 @@ from PySide6.QtWidgets import (
 from themes.theme_manager import ThemeManager
 from views.background_canvas import BackgroundCanvas
 from views.file_tab import FileTab
+from views.project_tree_model import ProjectTreeModel
 
 if TYPE_CHECKING:
     from views.dialogs.search_dialog import SearchResult
@@ -157,7 +157,71 @@ class UIMixin:
         self._refresh_background_overlay_targets(enabled)
 
 
+    def _refresh_tree_progress(self, file_path: str | None = None) -> None:
+        try:
+            if not file_path:
+                self._tree_progress_refresh_all = True
+            else:
+                self._pending_tree_progress_paths.add(file_path)
+            if not self._tree_progress_refresh_timer.isActive():
+                self._tree_progress_refresh_timer.start()
+        except Exception:
+            pass
+
+    def _flush_tree_progress_refresh(self) -> None:
+        try:
+            model = getattr(self, "fs_model", None)
+            if model is None or not hasattr(model, "refresh_progress"):
+                return
+            if self._tree_progress_refresh_all:
+                self._pending_tree_progress_paths.clear()
+                self._tree_progress_refresh_all = False
+                model.refresh_progress(None)
+                return
+            paths = list(self._pending_tree_progress_paths)
+            self._pending_tree_progress_paths.clear()
+            for path in paths:
+                model.refresh_progress(path)
+        except Exception:
+            pass
+
+    def _live_tree_progress_payload(self, file_path: str) -> dict[str, Any] | None:
+        try:
+            path = (file_path or '').strip()
+            if not path:
+                return None
+            open_files = getattr(self, '_open_files', None) or {}
+            tab = open_files.get(path)
+            if tab is None:
+                return None
+            rev = int(getattr(tab, '_progress_revision', 0) or 0)
+            cached = self._live_tree_progress_cache.get(path)
+            if cached and cached[0] == rev:
+                return {'signature': rev, 'progress': cached[1]}
+            entries = getattr(tab, '_entries', None) or []
+            from services.file_progress_service import compute_entries_progress
+            done, total, percent = compute_entries_progress(entries)
+            progress = {
+                'has_state': True,
+                'done': done,
+                'total': total,
+                'percent': percent,
+                'is_full': percent >= 100,
+            }
+            self._live_tree_progress_cache[path] = (rev, progress)
+            return {'signature': rev, 'progress': progress}
+        except Exception:
+            return None
+
     def _build_ui(self):
+        self._pending_tree_progress_paths: set[str] = set()
+        self._tree_progress_refresh_all = False
+        self._tree_progress_refresh_timer = QTimer(self)
+        self._tree_progress_refresh_timer.setSingleShot(True)
+        self._tree_progress_refresh_timer.setInterval(120)
+        self._tree_progress_refresh_timer.timeout.connect(self._flush_tree_progress_refresh)
+
+        self._live_tree_progress_cache: dict[str, tuple[int, dict[str, Any]]] = {}
         self.central_host = BackgroundCanvas()
         self.central_host.setObjectName("mainBackgroundHost")
         self.central_layout = QVBoxLayout(self.central_host)
@@ -180,7 +244,12 @@ class UIMixin:
         self.tree_header.setContentsMargins(0, 0, 0, 0)
         tree_layout.addWidget(self.tree_header)
 
-        self.fs_model = QFileSystemModel()
+        self.fs_model = ProjectTreeModel(
+            project_getter=lambda: getattr(self, "current_project", None),
+            supported_exts_getter=self._supported_extensions,
+            live_progress_getter=self._live_tree_progress_payload,
+            parent=self,
+        )
         self.fs_model.setRootPath("")
 
         self.tree = QTreeView()

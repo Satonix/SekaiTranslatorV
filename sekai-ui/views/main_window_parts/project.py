@@ -110,6 +110,7 @@ class ProjectMixin:
 
         self.tabs.clear()
         self._refresh_project_state()
+        self._refresh_tree_progress()
 
         # Sempre lembrar a pasta do projeto (estável), não o input do diálogo
         self._remember_last_project(project.get("project_path") or project_path)
@@ -279,6 +280,7 @@ class ProjectMixin:
                     tab.load_project_state_if_exists(self.current_project)
         except Exception:
             pass
+        self._refresh_tree_progress()
 
     def _save_all_open_files_state(self):
         if not self.current_project:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -50,6 +50,12 @@ class FileTab(QWidget):
 
         self.is_dirty: bool = False
         self._undo = UndoStack()
+        self._progress_revision: int = 0
+        self._progress_refresh_timer = QTimer(self)
+        self._progress_refresh_timer.setSingleShot(True)
+        self._progress_refresh_timer.setInterval(120)
+        self._progress_refresh_timer.timeout.connect(self._flush_progress_refresh)
+        self._pending_progress_file_path: str | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -93,6 +99,26 @@ class FileTab(QWidget):
             return
         self.is_dirty = dirty
         self.dirtyChanged.emit(self.is_dirty)
+
+    def touch_progress(self, *, file_path: str | None = None) -> None:
+        try:
+            self._progress_revision = int(getattr(self, '_progress_revision', 0) or 0) + 1
+        except Exception:
+            self._progress_revision = 1
+        self._pending_progress_file_path = file_path or self.file_path or self._pending_progress_file_path
+        try:
+            if not self._progress_refresh_timer.isActive():
+                self._progress_refresh_timer.start()
+        except Exception:
+            self._flush_progress_refresh()
+
+    def _flush_progress_refresh(self) -> None:
+        try:
+            host = self.window()
+            if host is not None and hasattr(host, '_refresh_tree_progress'):
+                host._refresh_tree_progress(self._pending_progress_file_path or self.file_path)
+        except Exception:
+            pass
 
     def _visible_rows(self) -> list[int]:
         sm = self.table.selectionModel()
@@ -170,6 +196,7 @@ class FileTab(QWidget):
 
             self._undo.clear()
             self.set_dirty(False)
+            self.touch_progress()
 
             if self.model.rowCount() > 0:
                 self.table.selectRow(0)
@@ -321,6 +348,7 @@ class FileTab(QWidget):
                     self.model.refresh_row(vr)
 
         self.set_dirty(True)
+        self.touch_progress()
         self._refresh_editor_from_selection()
 
     def redo(self) -> None:
@@ -343,6 +371,7 @@ class FileTab(QWidget):
                     self.model.refresh_row(vr)
 
         self.set_dirty(True)
+        self.touch_progress()
         self._refresh_editor_from_selection()
 
     def _refresh_editor_from_selection(self) -> None:
@@ -360,6 +389,7 @@ class FileTab(QWidget):
             had_bom=bool(self.had_bom),
         )
         self.set_dirty(False)
+        self.touch_progress()
 
     def load_project_state_if_exists(self, project: dict) -> None:
         if not self.file_path:
@@ -412,6 +442,7 @@ class FileTab(QWidget):
         self.model.set_entries(self._entries)
         self._undo.clear()
         self.set_dirty(False)
+        self.touch_progress()
 
         if self.model.rowCount() > 0:
             self.table.selectRow(0)
